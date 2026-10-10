@@ -11,3 +11,6 @@ torchvision
 
 Pillow
 tqdm
+
+opencv-python
+pydicom

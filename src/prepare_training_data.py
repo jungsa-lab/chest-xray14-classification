@@ -723,7 +723,11 @@ def main():
 
     # quality_df = inspect_images(df)
     # 전체 이미지 재검사 대신 저장된 검사표 사용
-    quality_df = pd.read_csv(QUALITY_REPORT_PATH)
+    #quality_df = pd.read_csv(QUALITY_REPORT_PATH)
+    if QUALITY_REPORT_PATH.is_file():
+        quality_df = pd.read_csv(QUALITY_REPORT_PATH)
+    else:
+        quality_df = inspect_images(df)
 
     # 검사표와 현재 메타데이터의 대상이 일치하는지 확인
     if (
