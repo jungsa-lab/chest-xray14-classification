@@ -9,8 +9,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 METADATA_PATH = PROCESSED_DIR / "fold_metadata.csv"
 
+REPORT_TABLES_DIR = (
+    PROJECT_ROOT / "reports" / "preprocessing" / "tables"
+)
 
 def main():
+    REPORT_TABLES_DIR.mkdir(parents=True, exist_ok=True)
     df = pd.read_csv(
         METADATA_PATH,
         usecols=["Split", "Fold", *DISEASES],
@@ -52,8 +56,10 @@ def main():
     ]
     fold_rates.index.name = "Disease"
 
-    summary_path = PROCESSED_DIR / "train_label_summary.csv"
-    fold_path = PROCESSED_DIR / "fold_label_rates.csv"
+    # summary_path = PROCESSED_DIR / "train_label_summary.csv"
+    # fold_path = PROCESSED_DIR / "fold_label_rates.csv"
+    summary_path = REPORT_TABLES_DIR / "train_label_summary.csv"
+    fold_path = REPORT_TABLES_DIR / "fold_label_rates.csv"
 
     summary.to_csv(
         summary_path, index=False, encoding="utf-8-sig"

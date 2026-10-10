@@ -11,8 +11,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 METADATA_PATH = PROCESSED_DIR / "fold_metadata.csv"
 
+REPORT_DIR = PROJECT_ROOT / "reports" / "preprocessing"
+REPORT_TABLES_DIR = REPORT_DIR / "tables"
+REPORT_FIGURES_DIR = REPORT_DIR / "figures"
+
 
 def main():
+    REPORT_TABLES_DIR.mkdir(parents=True, exist_ok=True)
+    REPORT_FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+
     df = pd.read_csv(
         METADATA_PATH,
         usecols=["Split", "Fold", *DISEASES],
@@ -39,8 +46,11 @@ def main():
     )
     cooccurrence.index.name = "Disease"
 
-    csv_path = PROCESSED_DIR / "train_cooccurrence.csv"
-    image_path = PROCESSED_DIR / "train_cooccurrence.png"
+    # csv_path = PROCESSED_DIR / "train_cooccurrence.csv"
+    # image_path = PROCESSED_DIR / "train_cooccurrence.png"
+    
+    csv_path = REPORT_TABLES_DIR / "train_cooccurrence.csv"
+    image_path = REPORT_FIGURES_DIR / "train_cooccurrence.png"
 
     cooccurrence.to_csv(
         csv_path,

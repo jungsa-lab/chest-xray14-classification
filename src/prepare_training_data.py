@@ -12,6 +12,10 @@ RAW_DIR = PROJECT_ROOT / "data" / "raw"
 METADATA_PATH = RAW_DIR / "Data_Entry_2017.csv"
 IMAGE_DIR = RAW_DIR / "images"
 
+REPORT_TABLES_DIR = (
+    PROJECT_ROOT / "reports" / "preprocessing" / "tables"
+)
+
 QUALITY_REPORT_PATH = (
     PROJECT_ROOT / "data" / "processed" / "image_quality_audit.csv"
 )
@@ -57,9 +61,8 @@ FOLD_METADATA_PATH = (
     PROJECT_ROOT / "data" / "processed" / "fold_metadata.csv"
 )
 
-FOLD_SUMMARY_PATH = (
-    PROJECT_ROOT / "data" / "processed" / "fold_summary.csv"
-)
+FOLD_SUMMARY_PATH = REPORT_TABLES_DIR / "fold_summary.csv"
+
 
 def load_metadata() -> pd.DataFrame:
     """원본 메타데이터를 읽고 불필요한 열 제거"""
@@ -652,6 +655,8 @@ def assign_folds(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main():
+    REPORT_TABLES_DIR.mkdir(parents=True, exist_ok=True)
+    
     df = load_metadata()
     df = preprocess_age(df)
     df = encode_labels(df)
