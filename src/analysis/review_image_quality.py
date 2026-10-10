@@ -1,19 +1,20 @@
+from src.paths import RAW_DIR, PROCESSED_DIR
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
 from PIL import Image
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-RAW_DIR = PROJECT_ROOT / "data" / "raw"
-PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
+from src.paths import PROJECT_ROOT
 
-METADATA_PATH = PROCESSED_DIR / "split_metadata.csv"
-PREVIEW_PATH = PROCESSED_DIR / "train_quality_candidates.png"
-CANDIDATES_PATH = PROCESSED_DIR / "train_quality_candidates.csv"
+METADATA_PATH = PROCESSED_DIR / "fold_metadata.csv"
+PREVIEW_PATH = PROJECT_ROOT / "reports/preprocessing/figures/train_quality_candidates.png"
+CANDIDATES_PATH = PROJECT_ROOT / "reports/preprocessing/tables/train_quality_candidates.csv"
 
 def main():
-    df = pd.read_csv(METADATA_PATH)
+    PREVIEW_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CANDIDATES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    df = pd.read_csv(METADATA_PATH, low_memory=False)
 
     # 필터링 기준 검토에는 Train만 사용
     train_df = df.loc[df["Split"] == "train"].copy()

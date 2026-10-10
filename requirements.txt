@@ -11,3 +11,7 @@ torchvision
 
 Pillow
 tqdm
+
+# CLAHE 및 DICOM 실습
+opencv-python
+pydicom

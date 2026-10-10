@@ -285,3 +285,19 @@ desktop.ini
 !/reports/preprocessing/figures/
 /reports/preprocessing/figures/*
 !/reports/preprocessing/figures/train_cooccurrence.png
+!/reports/preprocessing/figures/clahe_comparison.png
+
+# Additional preprocessing evidence
+!/reports/preprocessing/tables/clahe_samples.csv
+!/reports/preprocessing/tables/clahe_bbox_samples.csv
+!/reports/preprocessing/tables/dicom_sample_audit.json
+!/reports/preprocessing/tables/train_quality_candidates.csv
+!/reports/preprocessing/figures/clahe_bbox_comparison.png
+!/reports/preprocessing/figures/train_quality_candidates.png
+
+# Local cleanup package and trained model artifacts
+/project_cleanup/
+/project_cleanup*.zip
+*.h5
+*.hdf5
+/artifacts/checkpoints/

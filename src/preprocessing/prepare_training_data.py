@@ -1,3 +1,4 @@
+from src.paths import RAW_DIR
 from pathlib import Path
 
 import numpy as np
@@ -7,8 +8,8 @@ from tqdm import tqdm
 
 from sklearn.model_selection import GroupShuffleSplit, GroupKFold
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-RAW_DIR = PROJECT_ROOT / "data" / "raw"
+from src.paths import PROJECT_ROOT
+import argparse
 METADATA_PATH = RAW_DIR / "Data_Entry_2017.csv"
 IMAGE_DIR = RAW_DIR / "images"
 
@@ -26,22 +27,7 @@ SPLIT_METADATA_PATH = (
     PROJECT_ROOT / "data" / "processed" / "split_metadata.csv"
 )
 
-DISEASES = [
-    "Atelectasis",
-    "Cardiomegaly",
-    "Effusion",
-    "Infiltration",
-    "Mass",
-    "Nodule",
-    "Pneumonia",
-    "Pneumothorax",
-    "Consolidation",
-    "Edema",
-    "Emphysema",
-    "Fibrosis",
-    "Pleural_Thickening",
-    "Hernia",
-]
+from src.constants import DISEASES
 
 MIN_MEAN_BRIGHTNESS = 5.0
 MAX_MEAN_BRIGHTNESS = 250.0
@@ -654,7 +640,54 @@ def assign_folds(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def load_or_inspect_images(df: pd.DataFrame, refresh: bool = False) -> pd.DataFrame:
+    """검사표가 없으면 생성하고, 있으면 대상과 측정값을 확인해 재사용한다."""
+    if refresh or not QUALITY_REPORT_PATH.is_file():
+        quality_df = inspect_images(df)
+    else:
+        print(f"\n기존 이미지 검사표 재사용: {QUALITY_REPORT_PATH}")
+        quality_df = pd.read_csv(QUALITY_REPORT_PATH, low_memory=False)
+
+    required = {
+        "Image Index", "Image Path", "Readable", "Expected Size",
+        "Mean Brightness", "Brightness Std", "Error",
+    }
+    missing = required - set(quality_df.columns)
+    if missing:
+        raise ValueError(f"이미지 검사표 필수 열 누락: {sorted(missing)}")
+    if (quality_df["Image Index"].isna().any()
+            or quality_df["Image Index"].duplicated().any()
+            or set(quality_df["Image Index"]) != set(df["Image Index"])):
+        raise ValueError("이미지 검사표와 현재 메타데이터가 일치하지 않습니다.")
+
+    current_paths = df.set_index("Image Index")["Image Path"].sort_index()
+    saved_paths = quality_df.set_index("Image Index")["Image Path"].sort_index()
+    if not current_paths.eq(saved_paths).all():
+        raise ValueError("이미지 경로가 변경됐습니다. --refresh-image-audit로 재검사하세요.")
+
+    quality_df["Error"] = quality_df["Error"].fillna("")
+    for column in ["Readable", "Expected Size"]:
+        values = quality_df[column].astype("string").str.lower()
+        if not values.eq("true").fillna(False).all():
+            raise ValueError(f"이미지 검사표의 {column}에 실패 또는 결측이 있습니다.")
+        quality_df[column] = True
+    stats = quality_df[["Mean Brightness", "Brightness Std"]].apply(
+        pd.to_numeric, errors="coerce"
+    )
+    if (quality_df["Error"].ne("").any()
+            or not np.isfinite(stats.to_numpy(dtype=float)).all()
+            or not stats["Mean Brightness"].between(0, 255).all()
+            or stats["Brightness Std"].lt(0).any()):
+        raise ValueError("이미지 검사에 미해결 항목 또는 잘못된 밝기 측정값이 있습니다.")
+    quality_df[stats.columns] = stats
+    return quality_df
+
+
 def main():
+    parser = argparse.ArgumentParser(description="메타데이터·품질 검사·환자 분할·Fold 생성")
+    parser.add_argument("--refresh-image-audit", action="store_true",
+                        help="저장된 검사표 대신 전체 이미지를 다시 검사")
+    args = parser.parse_args()
     REPORT_TABLES_DIR.mkdir(parents=True, exist_ok=True)
     
     df = load_metadata()
@@ -721,24 +754,7 @@ def main():
         ].head(5).to_string(index=False)
     )
 
-    # quality_df = inspect_images(df)
-    # 전체 이미지 재검사 대신 저장된 검사표 사용
-    quality_df = pd.read_csv(QUALITY_REPORT_PATH)
-
-    # 검사표와 현재 메타데이터의 대상이 일치하는지 확인
-    if (
-        quality_df["Image Index"].duplicated().any()
-        or set(quality_df["Image Index"]) != set(df["Image Index"])
-    ):
-        raise ValueError("이미지 검사표와 현재 메타데이터가 일치하지 않습니다.")
-
-    quality_df["Error"] = quality_df["Error"].fillna("")
-
-    if (
-        quality_df["Error"].ne("").any()
-        or quality_df["Mean Brightness"].isna().any()
-    ):
-        raise ValueError("이미지 검사에 미해결 항목이 있습니다.")
+    quality_df = load_or_inspect_images(df, refresh=args.refresh_image_audit)
 
     # 기존 Image Path와 중복되지 않도록 검사표 쪽 경로 열 제외
     df = df.merge(

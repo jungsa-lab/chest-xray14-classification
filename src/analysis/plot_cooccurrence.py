@@ -1,14 +1,13 @@
-from pathlib import Path
+from src.paths import PROCESSED_DIR
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from prepare_training_data import DISEASES
+from src.constants import DISEASES
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
+from src.paths import PROJECT_ROOT
 METADATA_PATH = PROCESSED_DIR / "fold_metadata.csv"
 
 REPORT_DIR = PROJECT_ROOT / "reports" / "preprocessing"
