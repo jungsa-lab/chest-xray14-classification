@@ -38,7 +38,6 @@ CLAHE 비교, 모델 입력 변환·DataLoader 점검, 공개 DICOM 샘플 실�
 | `notebooks/` | 기존 탐색 노트북 |
 
 [전처리 결과 및 해석](reports/preprocessing/README.md) ·
-[구조 정리 변경점](docs/project_structure.md) ·
 [기존 데이터 안내](data/README.md)
 
 ## 실행 환경
