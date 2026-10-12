@@ -3,7 +3,7 @@ import unittest
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from src.training.engine import (
     train_one_epoch,
@@ -12,6 +12,27 @@ from src.training.engine import (
 
 from src.training.losses import FocalLoss
 
+
+class DummyDataset(Dataset):
+    """학습 루프 테스트를 위한 간단한 데이터셋."""
+    
+    def __init__(
+        self,
+        images: torch.Tensor,
+        labels: torch.Tensor,
+    ):
+        self.images = images
+        self.labels = labels
+        
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, index):
+        return {
+            "image": self.images[index],
+            "label": self.labels[index],
+        }
+        
 class TestTrainEngine(unittest.TestCase):
     
     def setUp(self):
@@ -31,13 +52,16 @@ class TestTrainEngine(unittest.TestCase):
         images = torch.randn(8, 4)
         labels = torch.randint(0, 2, (8, 14)).float()
         
-        samples = [
-            {"image": image, "label": label}
-            for image, label in zip(images, labels)
-        ]
+        # samples = [
+        #     {"image": image, "label": label}
+        #     for image, label in zip(images, labels)
+        # ]
+        
+        dataset = DummyDataset(images, labels)
         
         self.loader = DataLoader(
-            samples,
+        #   samples,
+            dataset,
             batch_size=4,
         )
     
