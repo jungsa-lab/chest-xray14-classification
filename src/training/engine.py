@@ -42,7 +42,7 @@ def train_one_epoch(
     
     return total_loss / total_samples
 
-@torch.no_grad()
+@torch.no_grad()    # 검증 과정에서 불필요한 기울기 계산을 비활성화
 def validate_one_epoch(
     model: nn.Module,
     loader: DataLoader,
