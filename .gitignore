@@ -268,6 +268,16 @@ logs/
 Thumbs.db
 desktop.ini
 
+# Python 가상환경
+.venv/
+.venv-dml/
+venv/
+env/
+
+# Python 캐시
+__pycache__/
+*.pyc
+
 # 전처리 보고서: 지정한 문서와 결과물만 공유
 !/reports/
 !/reports/preprocessing/
