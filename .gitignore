@@ -225,8 +225,21 @@ __marimo__/
 
 # Dataset
 # Do not commit the NIH ChestX-ray14 dataset.
-data/*
-!data/README.md
+# 원본 데이터와 생성 결과는 기본적으로 제외
+!/data/
+/data/*
+
+# 데이터 안내 문서는 공유
+!/data/README.md
+
+# processed 내부는 명시한 결과물만 공유
+!/data/processed/
+/data/processed/*
+
+!/data/processed/fold_metadata.csv
+!/data/processed/excluded_train_images.csv
+!/data/processed/image_quality_audit.csv
+!/data/processed/image_alpha_audit.csv
 
 # Model checkpoints / trained weights
 *.pt
@@ -254,3 +267,37 @@ logs/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# 전처리 보고서: 지정한 문서와 결과물만 공유
+!/reports/
+!/reports/preprocessing/
+/reports/preprocessing/*
+
+!/reports/preprocessing/README.md
+
+!/reports/preprocessing/tables/
+/reports/preprocessing/tables/*
+!/reports/preprocessing/tables/fold_summary.csv
+!/reports/preprocessing/tables/fold_label_rates.csv
+!/reports/preprocessing/tables/train_label_summary.csv
+!/reports/preprocessing/tables/train_cooccurrence.csv
+
+!/reports/preprocessing/figures/
+/reports/preprocessing/figures/*
+!/reports/preprocessing/figures/train_cooccurrence.png
+!/reports/preprocessing/figures/clahe_comparison.png
+
+# Additional preprocessing evidence
+!/reports/preprocessing/tables/clahe_samples.csv
+!/reports/preprocessing/tables/clahe_bbox_samples.csv
+!/reports/preprocessing/tables/dicom_sample_audit.json
+!/reports/preprocessing/tables/train_quality_candidates.csv
+!/reports/preprocessing/figures/clahe_bbox_comparison.png
+!/reports/preprocessing/figures/train_quality_candidates.png
+
+# Local cleanup package and trained model artifacts
+/project_cleanup/
+/project_cleanup*.zip
+*.h5
+*.hdf5
+/artifacts/checkpoints/

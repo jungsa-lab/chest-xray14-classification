@@ -1,0 +1,5 @@
+﻿Image Index,Patient ID,Nodule,Image Path,Split,Fold,CLAHE Clip Limit,CLAHE Grid X,CLAHE Grid Y
+00006642_002.png,6642,1,images/images-224/00006642_002.png,train,4,2.0,8,8
+00017266_005.png,17266,1,images/images-224/00017266_005.png,train,4,2.0,8,8
+00014140_008.png,14140,1,images/images-224/00014140_008.png,train,4,2.0,8,8
+00029950_006.png,29950,1,images/images-224/00029950_006.png,train,2,2.0,8,8

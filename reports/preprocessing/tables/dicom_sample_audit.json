@@ -1,0 +1,26 @@
+{
+  "sample": "pydicom CT_small.dcm",
+  "scope": "sample-only metadata removal exercise",
+  "original_modified": false,
+  "dataset_elements_before": 258,
+  "dataset_elements_after": 14,
+  "private_elements_before": 179,
+  "private_elements_after": 0,
+  "checked_fields_absent": {
+    "PatientName": true,
+    "PatientID": true,
+    "PatientBirthDate": true,
+    "AccessionNumber": true,
+    "StudyDate": true,
+    "InstitutionName": true,
+    "ReferringPhysicianName": true,
+    "StudyInstanceUID": true,
+    "SeriesInstanceUID": true,
+    "SOPInstanceUID": true
+  },
+  "only_allowed_dataset_fields": true,
+  "pixel_values_unchanged": true,
+  "dicom_file_saved": false,
+  "pixel_identifiers_reviewed": false,
+  "full_deidentification_verified": false
+}
