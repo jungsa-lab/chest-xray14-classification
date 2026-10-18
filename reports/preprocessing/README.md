@@ -178,6 +178,57 @@ Fold 배정은 완료했지만,
 색상에는 log(1 + 개수)를 사용하며, 각 칸의 숫자는 실제 개수다.
 동시 출현 횟수만으로 인과관계나 연관성의 강도를 판단하지 않는다.
 
+### 전체 데이터 기준 유병률
+
+데이터셋 전체(112,120장, 30,805명)의 질환별 유병률을
+이미지 기준과 환자 기준으로 함께 집계했다.
+환자 기준은 한 번이라도 해당 라벨이 기록된 환자의 비율이다.
+이 표는 데이터셋을 기술하기 위한 것이며,
+모델 선택이나 임계값 결정에는 사용하지 않는다.
+
+| 질환 | 이미지 수 | 이미지 기준 (%) | 환자 기준 (%) | Train (%) | Test (%) |
+|---|---:|---:|---:|---:|---:|
+| Infiltration | 19,870 | 17.72 | 26.07 | 17.75 | 17.57 |
+| Effusion | 13,307 | 11.87 | 13.87 | 11.92 | 11.56 |
+| Atelectasis | 11,535 | 10.29 | 16.15 | 10.32 | 10.09 |
+| Nodule | 6,323 | 5.64 | 11.00 | 5.65 | 5.56 |
+| Mass | 5,746 | 5.12 | 8.28 | 5.16 | 4.95 |
+| Pneumothorax | 5,298 | 4.73 | 4.82 | 4.71 | 4.84 |
+| Consolidation | 4,667 | 4.16 | 6.98 | 4.17 | 4.14 |
+| Pleural_Thickening | 3,385 | 3.02 | 6.51 | 3.03 | 2.97 |
+| Cardiomegaly | 2,772 | 2.47 | 5.08 | 2.46 | 2.55 |
+| Emphysema | 2,516 | 2.24 | 3.40 | 2.20 | 2.49 |
+| Edema | 2,303 | 2.05 | 3.48 | 2.07 | 1.99 |
+| Fibrosis | 1,686 | 1.50 | 4.09 | 1.47 | 1.68 |
+| Pneumonia | 1,353 | 1.21 | 3.10 | 1.20 | 1.26 |
+| Hernia | 227 | 0.20 | 0.43 | 0.19 | 0.26 |
+| No Finding | 60,412 | 53.88 | 80.87 | 53.87 | 53.97 |
+
+- 가장 흔한 질환과 가장 드문 질환의 유병률은 약 89배 차이 난다.
+- Train과 Test의 질환별 유병률 차이는 최대 0.36%p다.
+- Train은 품질 검사를 통과한 95,394장, Test는 16,724장 기준이다.
+
+### 조건부 동시 출현
+
+개수 행렬은 흔한 질환이 색을 지배하므로,
+각 행을 해당 질환의 양성 수로 나눈 조건부 비율도 계산했다.
+칸의 값은 행 질환이 있는 이미지 중 열 질환도 함께 표시된 비율(%)이다.
+
+![Train 조건부 동시 출현](figures/train_conditional_cooccurrence.png)
+
+- Pneumonia 이미지의 42.9%, Edema 이미지의 42.7%에 Infiltration이 함께 표시됐다.
+- Cardiomegaly 이미지의 38.5%에 Effusion, Emphysema 이미지의 30.4%에 Pneumothorax가 함께 표시됐다.
+- 다른 질환 없이 단독으로 표시된 비율은 Pneumonia 22.0%, Edema 27.8%, Consolidation 28.8%로 낮다.
+
+모델이 병변 자체보다 함께 표시되는 소견의 패턴을 학습할 수 있으므로,
+질환별 성능은 동반 질환 유무를 나누어 확인할 필요가 있다.
+조건부 비율 역시 연관성을 기술할 뿐 인과관계를 뜻하지 않는다.
+
+| 결과물 | 용도 |
+|---|---|
+| [dataset_prevalence.csv](tables/dataset_prevalence.csv) | 전체 데이터 이미지·환자 기준 유병률 및 Train/Test 비교 |
+| [train_conditional_cooccurrence.csv](tables/train_conditional_cooccurrence.csv) | 조건부 동시 출현 비율 |
+
 ## 7. CLAHE 적용 전후 비교
 
 ### 비교 방법
@@ -218,9 +269,55 @@ BBox 비교 그림의 노란 사각형은 데이터셋의 Nodule 주석이며
 그러나 모든 예시에서 대상이 명확해진 것은 아니며,
 주변 구조와 영상의 거친 질감도 함께 강조됐다.
 
+### 정량 비교
+
+정성 비교를 보완하기 위해, 품질 검사를 통과한 Train의
+전체 BBox 839개(이미지 749장, 8개 질환)에 대해
+병변 영역과 주변 영역의 지표를 CLAHE 전후로 측정했다.
+Test 이미지의 BBox는 사용하지 않았다.
+
+| 지표 | 정의 | 의미 |
+|---|---|---|
+| Contrast | 병변 평균 밝기와 주변 평균 밝기의 차이(절댓값) | 병변이 주변과 구분되는 정도 |
+| CNR | Contrast / 주변 밝기 표준편차 | 노이즈 대비 병변 신호. 노이즈가 함께 커지면 증가하지 않는다 |
+| Lesion Std | 병변 내부 밝기 표준편차 | 병변 내부 구조의 선명도 |
+| Lesion Entropy | 병변 내부 밝기 분포의 엔트로피 | 병변 내부 정보량 |
+
+주변 영역은 BBox를 긴 변의 0.5배만큼 넓힌 테두리 영역이다.
+값은 같은 BBox의 원본 대비 변화율이며, 표에는 BBox별 변화율의 중앙값을 적었다.
+
+| clipLimit | Contrast | CNR | Lesion Std | Lesion Entropy |
+|---:|---:|---:|---:|---:|
+| 1.0 | +12.9% | −0.3% | +23.7% | +4.4% |
+| **2.0** | **+14.2%** | **−2.1%** | **+38.8%** | **+7.5%** |
+| 3.0 | +16.5% | −5.4% | +50.7% | +9.4% |
+| 4.0 | +16.8% | −4.2% | +59.9% | +10.7% |
+
+| 질환 (clipLimit=2.0) | BBox | Contrast | CNR | Lesion Std |
+|---|---:|---:|---:|---:|
+| Nodule | 66 | +46.8% | +2.2% | +92.7% |
+| Mass | 74 | +38.3% | −2.0% | +53.4% |
+| Infiltration | 112 | +31.0% | +9.5% | +37.5% |
+| Pneumothorax | 84 | +21.1% | +2.6% | +66.9% |
+| Atelectasis | 159 | +17.5% | −1.7% | +42.4% |
+| Pneumonia | 103 | +14.7% | +8.0% | +26.8% |
+| Effusion | 128 | +12.1% | +4.8% | +34.0% |
+| Cardiomegaly | 113 | −22.7% | −26.9% | +12.0% |
+
+![CLAHE 병변 지표](figures/clahe_bbox_metrics.png)
+
+- 병변과 주변의 밝기 차이와 병변 내부 구조는 CLAHE 적용 후 커졌다. Nodule과 Mass에서 가장 컸다.
+- 전체 CNR은 거의 변하지 않거나 약간 감소했다. 병변 신호와 함께 주변 노이즈도 증폭되기 때문이다.
+- clipLimit이 클수록 대비는 조금 더 커지지만 CNR 감소도 커진다.
+  현재 설정 2.0은 대비 개선이 3.0·4.0과 비슷하면서 CNR 감소가 작다.
+- Cardiomegaly처럼 큰 구조물은 타일 단위 평활화로 주변과의 차이가 오히려 줄었다.
+
+이 결과는 영상 지표상의 시인성 변화이며 모델 성능 향상을 뜻하지 않는다.
+CLAHE 사용 여부는 기존 원칙대로 교차검증 성능 비교로 결정한다.
+
 ### 해석의 한계
 
-- 각 비교는 4개 예시에 대한 정성적 관찰이며 전체 데이터의 효과를 보장하지 않는다.
+- 그림 비교는 4개 예시에 대한 정성적 관찰이며, 정량 비교는 BBox 영역의 밝기 통계만 측정한다.
 - 224×224 영상의 확대는 소실된 세부 정보를 복원하지 않는다.
 - BBox 위치의 정확성은 다운로드 데이터의 기하학적 변환 방식에 의존한다.
 - 임상적 검출 능력이나 모델 성능 향상을 입증한 결과는 아니다.
@@ -230,6 +327,8 @@ BBox 비교 그림의 노란 사각형은 데이터셋의 Nodule 주석이며
 
 - 전체 영상 비교: `src/analysis/compare_clahe.py`
 - BBox 비교: `src/analysis/compare_clahe_bbox.py`
+- BBox 정량 비교: `src/analysis/measure_clahe_bbox.py`
+- [clipLimit별 전체·질환별 요약](tables/clahe_bbox_metric_summary.csv) (`Scope=All`은 전체, 나머지는 질환명)
 - [전체 영상 비교 대상·설정](tables/clahe_samples.csv)
 - [BBox 비교 대상·좌표·설정](tables/clahe_bbox_samples.csv)
 
@@ -381,6 +480,9 @@ DICOM 파일로 저장하는 용도로 사용하지 않는다.
 | `src/analysis/plot_cooccurrence.py` | 동시 출현 행렬 및 히트맵 생성 |
 | `src/analysis/compare_clahe.py` | CLAHE 전체 영상 비교 |
 | `src/analysis/compare_clahe_bbox.py` | CLAHE BBox 영역 비교 |
+| `src/analysis/measure_clahe_bbox.py` | CLAHE BBox 영역 지표 정량 비교 |
+| `src/analysis/summarize_prevalence.py` | 전체 데이터 이미지·환자 기준 유병률 |
+| `src/analysis/plot_conditional_cooccurrence.py` | 조건부 동시 출현 비율 및 히트맵 |
 | `src/data/image_transforms.py` | 모델 입력 이미지 변환 |
 | `src/data/chest_xray_dataset.py` | 이미지·정답 연결 및 Fold 선택 |
 | `src/dicom/inspect_dicom.py` | DICOM 메타데이터 및 픽셀 파싱 |
@@ -489,6 +591,9 @@ image_path = (
 .\.venv\Scripts\python.exe -m src.analysis.review_image_quality
 .\.venv\Scripts\python.exe -m src.analysis.compare_clahe
 .\.venv\Scripts\python.exe -m src.analysis.compare_clahe_bbox
+.\.venv\Scripts\python.exe -m src.analysis.measure_clahe_bbox
+.\.venv\Scripts\python.exe -m src.analysis.summarize_prevalence
+.\.venv\Scripts\python.exe -m src.analysis.plot_conditional_cooccurrence
 ```
 
 표는 `reports/preprocessing/tables/`,
@@ -518,5 +623,8 @@ CLAHE 비교는 품질 기준을 통과한 Train을 대상으로 한다.
 - [x] Train 내부 5-Fold 배정 및 질환별 양성·음성 확인
 - [x] 질환 분포 표 및 동시 출현 히트맵 생성
 - [x] CLAHE 전체 영상·BBox 영역 비교 및 문서화
+- [x] CLAHE BBox 영역 정량 비교 (Train BBox 839개)
+- [x] 전체 데이터 이미지·환자 기준 유병률 표
+- [x] 조건부 동시 출현 히트맵 및 단독 표시 비율
 - [x] 모델 입력 변환 및 ImageNet 정규화
 - [x] 공개 DICOM 샘플 파싱·식별 태그 제거 실습 및 로컬 영상 확인

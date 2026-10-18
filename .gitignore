@@ -295,6 +295,13 @@ desktop.ini
 !/reports/preprocessing/figures/clahe_bbox_comparison.png
 !/reports/preprocessing/figures/train_quality_candidates.png
 
+# Quantitative CLAHE, full-dataset prevalence, conditional co-occurrence
+!/reports/preprocessing/tables/dataset_prevalence.csv
+!/reports/preprocessing/tables/train_conditional_cooccurrence.csv
+!/reports/preprocessing/tables/clahe_bbox_metric_summary.csv
+!/reports/preprocessing/figures/train_conditional_cooccurrence.png
+!/reports/preprocessing/figures/clahe_bbox_metrics.png
+
 # Local cleanup package and trained model artifacts
 /project_cleanup/
 /project_cleanup*.zip

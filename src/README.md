@@ -40,6 +40,9 @@ src/
 | `review_image_quality.py` | 밝기 등을 기준으로 이미지 품질 검토 |
 | `compare_clahe.py` | CLAHE 적용 전후 이미지 비교 |
 | `compare_clahe_bbox.py` | 질환 영역(BBox)을 중심으로 CLAHE 적용 결과 비교 |
+| `measure_clahe_bbox.py` | 질환 영역(BBox)의 대비·CNR 등으로 CLAHE 효과를 정량 비교 |
+| `summarize_prevalence.py` | 전체 데이터의 이미지·환자 기준 질환 유병률 집계 |
+| `plot_conditional_cooccurrence.py` | 한 질환이 있을 때 다른 질환이 함께 나타나는 비율 시각화 |
 
 데이터 통계나 시각화 자료를 추가할 때 사용하는 폴더입니다.
 
