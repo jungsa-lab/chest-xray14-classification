@@ -10,7 +10,7 @@
 name: ""
 
 # 모델
-model: densenet121
+model: densenet121         # densenet121 | efficientnet_b0
 pretrained: true            # ImageNet 사전학습 가중치
 
 # 입력
@@ -26,16 +26,11 @@ epochs: 30                  # 최대 Epoch 수
 lr: 1.0e-4
 weight_decay: 1.0e-5
 
-# 학습률 스케줄러
-#   plateau: 검증 AUROC가 plateau_patience Epoch 동안 오르지 않으면 lr × plateau_factor
-#   cosine : epochs 동안 코사인으로 감소
-scheduler: plateau
-plateau_factor: 0.1
-plateau_patience: 1
+# 학습률 스케줄러: CosineAnnealingLR(T_max=epochs), Epoch마다 step
 
-# Early Stopping (검증 Mean AUROC 기준)
-early_stop_patience: 4
-min_delta: 1.0e-4           # 이만큼 넘게 올라야 개선으로 인정
+# Early Stopping: 검증 Mean AUROC가 patience Epoch 연속 개선되지 않으면 종료
+early_stop_patience: 5
+min_delta: 0.0              # 이만큼 넘게 올라야 개선으로 인정
 
 # 혼합 정밀도 (CUDA에서만 적용)
 amp: true

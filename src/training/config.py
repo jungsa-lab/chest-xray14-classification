@@ -16,8 +16,6 @@ from src.paths import PROJECT_ROOT
 
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "configs" / "train.yaml"
 
-SCHEDULERS = ("plateau", "cosine")
-
 # 결과(모델 가중치·지표)에 영향을 주지 않는 실행 환경 항목 → 실험 ID 계산에서 제외
 RUNTIME_FIELDS = frozenset({
     "name", "device", "num_workers",
@@ -37,11 +35,8 @@ class TrainConfig:
     epochs: int = 30
     lr: float = 1e-4
     weight_decay: float = 1e-5
-    scheduler: str = "plateau"
-    plateau_factor: float = 0.1
-    plateau_patience: int = 1
-    early_stop_patience: int = 4
-    min_delta: float = 1e-4
+    early_stop_patience: int = 5
+    min_delta: float = 0.0
     amp: bool = True
     seed: int = 42
     device: str = "auto"
@@ -61,7 +56,7 @@ class TrainConfig:
             if getattr(self, name) <= 0:
                 raise ValueError(f"{name}는 0보다 커야 합니다.")
 
-        non_negative = ("gamma", "weight_decay", "min_delta", "plateau_patience", "num_workers", "seed")
+        non_negative = ("gamma", "weight_decay", "min_delta", "num_workers", "seed")
         for name in non_negative:
             if getattr(self, name) < 0:
                 raise ValueError(f"{name}는 0 이상이어야 합니다.")
@@ -70,11 +65,6 @@ class TrainConfig:
         if any(sep in self.name for sep in ("/", "\\")) or self.name in (".", ".."):
             raise ValueError(f"name에는 경로 구분자를 쓸 수 없습니다: {self.name!r}")
 
-        if not 0 < self.plateau_factor < 1:
-            raise ValueError("plateau_factor는 0과 1 사이여야 합니다.")
-
-        if self.scheduler not in SCHEDULERS:
-            raise ValueError(f"scheduler는 {SCHEDULERS} 중 하나여야 합니다.")
 
     # ---- 실험 식별 ----
 

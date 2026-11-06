@@ -101,6 +101,8 @@ class TestConfig(unittest.TestCase):
         cfg = load_config(PROJECT_ROOT / "configs" / "train.yaml")
         self.assertEqual(cfg.model, "densenet121")
         self.assertIsInstance(cfg.lr, float)
+        # 요구사항: Early Stopping patience=5
+        self.assertEqual(cfg.early_stop_patience, 5)
 
     def test_exponent_string_becomes_float(self):
         # PyYAML은 1e-4를 문자열로 읽음
@@ -115,8 +117,6 @@ class TestConfig(unittest.TestCase):
             TrainConfig(amp="yes")
         with self.assertRaises(ValueError):
             TrainConfig(batch_size=8.5)
-        with self.assertRaises(ValueError):
-            TrainConfig(scheduler="step")
         with self.assertRaises(ValueError):
             TrainConfig(gamma=-1)
         with self.assertRaises(ValueError):
@@ -275,11 +275,25 @@ class TestTrainFold(PipelineTestCase):
         self.assertTrue(result["stopped_early"])
 
     def test_cosine_scheduler(self):
-        cfg = TrainConfig(**{**self.cfg.to_dict(), "scheduler": "cosine"})
-        self.train(cfg)
-        lr = pd.read_csv(fold_dir(cfg, 0) / HISTORY_FILE)["lr"]
-        self.assertTrue(lr.is_monotonic_decreasing)
-        self.assertLess(lr.iloc[-1], lr.iloc[0])
+        self.train()
+        lr = pd.read_csv(fold_dir(self.cfg, 0) / HISTORY_FILE)["lr"].to_numpy()
+        # CosineAnnealingLR(T_max=3): lr0, lr0·(1+cos(π/3))/2, lr0·(1+cos(2π/3))/2
+        expected = [self.cfg.lr * (1 + np.cos(np.pi * k / 3)) / 2 for k in range(3)]
+        np.testing.assert_allclose(lr, expected, rtol=1e-6)
+
+
+class TestBuildModel(unittest.TestCase):
+
+    def test_models_output_14_logits(self):
+        x = torch.randn(2, 3, 224, 224)
+        for name in ("densenet121", "efficientnet_b0"):
+            model = model_module.build_model(name, pretrained=False).eval()
+            with torch.no_grad():
+                self.assertEqual(tuple(model(x).shape), (2, len(DISEASES)), name)
+
+    def test_unknown_model_raises(self):
+        with self.assertRaises(ValueError):
+            model_module.build_model("resnet50", pretrained=False)
 
 
 class TestSummary(PipelineTestCase):
@@ -302,6 +316,42 @@ class TestSummary(PipelineTestCase):
 
     def test_no_results(self):
         self.assertIsNone(write_summary(self.root / "outputs", self.root / "reports"))
+
+    def test_gamma_comparison_and_selection(self):
+        reports = self.root / "reports"
+        quick = {**self.cfg.to_dict(), "epochs": 1}
+
+        # gamma 0은 5-Fold 완료, gamma 1은 아직 3개 Fold → 선택 불가
+        for fold in range(5):
+            self.train(TrainConfig(**{**quick, "gamma": 0.0}), fold=fold)
+        for fold in range(3):
+            self.train(TrainConfig(**{**quick, "gamma": 1.0}), fold=fold)
+        write_summary(self.root / "outputs", reports)
+        self.assertEqual(json.loads((reports / "selected_gamma.json").read_text()), {})
+        self.assertIn("아직 선택 불가", (reports / "gamma_comparison.md").read_text())
+
+        # gamma 1도 5-Fold 완료 → 같은 비교 그룹에서 AUROC가 높은 gamma 선택
+        for fold in range(3, 5):
+            self.train(TrainConfig(**{**quick, "gamma": 1.0}), fold=fold)
+        summary = write_summary(self.root / "outputs", reports)
+
+        self.assertEqual(summary["comparison_group"].nunique(), 1)
+        selected = json.loads((reports / "selected_gamma.json").read_text())
+        (choice,) = selected.values()
+        best = summary.sort_values("mean_auroc_mean", ascending=False).iloc[0]
+        self.assertEqual(choice["gamma"], best["gamma"])
+        self.assertEqual(choice["compared_gammas"], [0.0, 1.0])
+
+        table = pd.read_csv(reports / "gamma_comparison.csv")
+        self.assertEqual(list(table["gamma"]), [0.0, 1.0])
+        self.assertIn("(BCE 동일)", (reports / "gamma_comparison.md").read_text())
+
+    def test_other_settings_are_separate_groups(self):
+        quick = {**self.cfg.to_dict(), "epochs": 1}
+        self.train(TrainConfig(**{**quick, "gamma": 0.0}))
+        self.train(TrainConfig(**{**quick, "gamma": 1.0, "use_clahe": False}))
+        summary = write_summary(self.root / "outputs", self.root / "reports")
+        self.assertEqual(summary["comparison_group"].nunique(), 2)
 
 
 if __name__ == "__main__":

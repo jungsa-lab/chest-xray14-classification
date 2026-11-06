@@ -354,12 +354,8 @@ def train_fold(
     criterion = FocalLoss(gamma=cfg.gamma, pos_weight=pos_weight).to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    if cfg.scheduler == "plateau":
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="max", factor=cfg.plateau_factor, patience=cfg.plateau_patience,
-        )
-    else:
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs)
+    # Cosine Annealing: epochs 동안 lr을 코사인 곡선으로 0 근처까지 감소 (Epoch 단위 step)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs)
 
     scaler = torch.amp.GradScaler("cuda", enabled=amp)
     tracker = BestTracker(patience=cfg.early_stop_patience, min_delta=cfg.min_delta)
@@ -410,10 +406,7 @@ def train_fold(
         val_loss, y_true, logits = evaluate(model, val_loader, criterion, device, amp)
         metrics: MultilabelMetrics = evaluate_multilabel(y_true, sigmoid(logits))
 
-        if cfg.scheduler == "plateau":
-            scheduler.step(metrics.mean_auroc)
-        else:
-            scheduler.step()
+        scheduler.step()
 
         improved = tracker.update(metrics.mean_auroc, epoch)
         if improved:

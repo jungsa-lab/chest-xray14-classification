@@ -1,7 +1,9 @@
 import torch.nn as nn
 from torchvision.models import (
     DenseNet121_Weights,
+    EfficientNet_B0_Weights,
     densenet121,
+    efficientnet_b0,
 )
 
 from src.constants import DISEASES
@@ -29,9 +31,25 @@ def build_densenet121(
     return model
 
 
+def build_efficientnet_b0(pretrained: bool = True) -> nn.Module:
+    """14개 질환 분류용 EfficientNet-B0 모델 생성 (앙상블의 두 번째 모델)
+
+    입력 224×224, ImageNet 정규화가 DenseNet-121과 같아 같은 Dataset을 그대로 쓴다.
+    """
+    weights = EfficientNet_B0_Weights.IMAGENET1K_V1 if pretrained else None
+    model = efficientnet_b0(weights=weights)
+
+    # classifier = Sequential(Dropout(0.2), Linear(1280, 1000)) → 마지막 Linear만 14개 출력으로 교체
+    head = model.classifier[-1]
+    model.classifier[-1] = nn.Linear(head.in_features, len(DISEASES))
+
+    return model
+
+
 # 설정 파일의 model 이름 → 생성 함수. 새 모델은 여기에 한 줄 추가
 MODEL_BUILDERS = {
     "densenet121": build_densenet121,
+    "efficientnet_b0": build_efficientnet_b0,
 }
 
 
