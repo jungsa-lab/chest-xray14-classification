@@ -1,0 +1,53 @@
+# ChestX-ray14 학습 설정
+#
+# 명령줄에서 --set 으로 덮어쓸 수 있다.
+#   python -m src.training.run --folds 0 --set gamma=1 --set lr=3e-4
+#
+# 결과에 영향을 주는 값이 바뀌면 실험 ID(해시)가 달라져 다른 폴더에 저장된다.
+# 그래서 설정을 바꿨는데 예전 결과를 그대로 재사용하는 일이 생기지 않는다.
+
+# 실험 이름 (비우면 model_gamma_clahe 형태로 자동 생성)
+name: ""
+
+# 모델
+model: densenet121
+pretrained: true            # ImageNet 사전학습 가중치
+
+# 입력
+use_clahe: true
+
+# 손실 함수: Focal Loss (gamma=0이면 BCE)
+gamma: 2.0
+use_pos_weight: true        # 질환별 양성 가중치 (각 Fold의 학습 데이터로 계산)
+
+# 최적화
+batch_size: 32
+epochs: 30                  # 최대 Epoch 수
+lr: 1.0e-4
+weight_decay: 1.0e-5
+
+# 학습률 스케줄러
+#   plateau: 검증 AUROC가 plateau_patience Epoch 동안 오르지 않으면 lr × plateau_factor
+#   cosine : epochs 동안 코사인으로 감소
+scheduler: plateau
+plateau_factor: 0.1
+plateau_patience: 1
+
+# Early Stopping (검증 Mean AUROC 기준)
+early_stop_patience: 4
+min_delta: 1.0e-4           # 이만큼 넘게 올라야 개선으로 인정
+
+# 혼합 정밀도 (CUDA에서만 적용)
+amp: true
+
+# 재현성
+seed: 42
+
+# 실행 환경 (결과에 영향 없음 → 실험 ID에 포함되지 않음)
+device: auto                # auto | cuda | mps | cpu
+num_workers: 4
+
+# 경로 (상대 경로는 프로젝트 루트 기준)
+metadata_path: data/processed/fold_metadata.csv
+raw_dir: data/raw
+output_dir: outputs/training

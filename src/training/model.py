@@ -27,3 +27,21 @@ def build_densenet121(
     )                                   # 입력 1024개, 출력 14개
 
     return model
+
+
+# 설정 파일의 model 이름 → 생성 함수. 새 모델은 여기에 한 줄 추가
+MODEL_BUILDERS = {
+    "densenet121": build_densenet121,
+}
+
+
+def build_model(name: str, pretrained: bool = True) -> nn.Module:
+    """설정 파일의 모델 이름으로 14개 질환 분류 모델 생성"""
+    try:
+        builder = MODEL_BUILDERS[name]
+    except KeyError:
+        raise ValueError(
+            f"지원하지 않는 모델: {name} (지원: {sorted(MODEL_BUILDERS)})"
+        ) from None
+
+    return builder(pretrained=pretrained)
