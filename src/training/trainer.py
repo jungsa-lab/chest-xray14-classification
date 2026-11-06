@@ -43,6 +43,10 @@ PREDICTION_FILE = "val_predictions.csv"
 Logger = Callable[[str], None]
 
 
+class TimeLimitReached(Exception):
+    """시간 제한 안에 다음 Epoch를 끝낼 수 없어 멈춤. last.pt가 남아 있어 다시 실행하면 이어서 학습한다."""
+
+
 # ---------------------------------------------------------------------------
 # 실행 환경
 # ---------------------------------------------------------------------------
@@ -166,6 +170,7 @@ def train_epoch(
     scaler: torch.amp.GradScaler,
     device: torch.device,
     amp: bool,
+    memory_format: torch.memory_format = torch.contiguous_format,
 ) -> tuple[float, int]:
     """1 Epoch 학습. (평균 Loss, 건너뛴 step 수) 반환
 
@@ -177,7 +182,7 @@ def train_epoch(
     total_loss, total_samples, skipped = 0.0, 0, 0
 
     for batch in loader:
-        images = batch["image"].to(device, non_blocking=True)
+        images = batch["image"].to(device, non_blocking=True, memory_format=memory_format)
         targets = batch["label"].to(device, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
@@ -218,6 +223,7 @@ def evaluate(
     criterion: nn.Module,
     device: torch.device,
     amp: bool,
+    memory_format: torch.memory_format = torch.contiguous_format,
 ) -> tuple[float, np.ndarray, np.ndarray]:
     """검증 데이터 전체의 (평균 Loss, 정답, logit) 반환"""
     model.eval()
@@ -225,7 +231,7 @@ def evaluate(
     labels, logits_all = [], []
 
     for batch in loader:
-        images = batch["image"].to(device, non_blocking=True)
+        images = batch["image"].to(device, non_blocking=True, memory_format=memory_format)
         targets = batch["label"].to(device, non_blocking=True)
 
         with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=amp):
@@ -306,12 +312,17 @@ def train_fold(
     limit: int | None = None,
     force: bool = False,
     log: Logger = print,
+    deadline: float | None = None,
+    first_epoch_estimate: float = 1800.0,
 ) -> dict:
     """Fold 하나를 학습하고 최고 검증 성능 시점의 결과를 반환
 
     - result.json이 있으면 학습하지 않고 저장된 결과를 반환 (force=True면 처음부터 다시)
     - last.pt가 있으면 그 Epoch 다음부터 이어서 학습
     - limit을 주면 소량 표본으로 동작만 확인하고, 결과는 _smoke 폴더에 저장
+    - deadline(time.time() 기준 시각)을 주면, 다음 Epoch가 그 전에 끝나지 않을 것 같을 때
+      TimeLimitReached를 발생시키고 멈춘다. Epoch 시간은 직전 Epoch로 추정하고,
+      아직 기록이 없으면 first_epoch_estimate(초)로 본다.
     """
     if fold not in range(N_FOLDS):
         raise ValueError(f"fold는 0~{N_FOLDS - 1} 중 하나여야 합니다: {fold}")
@@ -332,7 +343,14 @@ def train_fold(
     started = time.time()
     seed_everything(cfg.seed)
     device = select_device(cfg.device)
-    amp = cfg.amp and device.type == "cuda"
+    cuda = device.type == "cuda"
+    amp = cfg.amp and cuda
+
+    # 속도 옵션은 CUDA에서만 적용 (MPS·CPU에서는 효과가 없거나 오히려 느림)
+    channels_last = cfg.channels_last and cuda
+    memory_format = torch.channels_last if channels_last else torch.contiguous_format
+    if cuda:
+        torch.backends.cudnn.benchmark = cfg.cudnn_benchmark
 
     # ---- 데이터 ----
     if metadata is None:
@@ -347,7 +365,7 @@ def train_fold(
     val_loader = make_loader(val_df, cfg, device, train=False)
 
     # ---- 모델·손실·최적화 ----
-    model = build_model(cfg.model, pretrained=cfg.pretrained).to(device)
+    model = build_model(cfg.model, pretrained=cfg.pretrained).to(device, memory_format=memory_format)
 
     # 양성 가중치는 이번 Fold의 학습 데이터로만 계산 (검증 라벨 누수 방지)
     pos_weight = compute_pos_weight(train_df) if cfg.use_pos_weight else None
@@ -388,7 +406,7 @@ def train_fold(
         log(f"{tag} epoch {ckpt['epoch']}까지 학습된 체크포인트에서 이어서 학습")
 
     log(
-        f"{tag} device={device} amp={amp} "
+        f"{tag} device={device} amp={amp} channels_last={channels_last} "
         f"train={len(train_df):,} val={len(val_df):,} epochs≤{cfg.epochs}"
     )
 
@@ -397,13 +415,24 @@ def train_fold(
         if tracker.should_stop:
             break
 
+        if deadline is not None:
+            estimate = history[-1]["seconds"] if history else first_epoch_estimate
+            if time.time() + estimate > deadline:
+                log(
+                    f"{tag} 시간 제한: epoch {epoch} (예상 {estimate:.0f}s)을 끝낼 시간이 없어 멈춤. "
+                    f"다시 실행하면 이어서 학습"
+                )
+                raise TimeLimitReached(f"{tag} epoch {epoch} 전에 시간 제한")
+
         epoch_started = time.time()
         lr = optimizer.param_groups[0]["lr"]
 
         train_loss, skipped = train_epoch(
-            model, train_loader, criterion, optimizer, scaler, device, amp
+            model, train_loader, criterion, optimizer, scaler, device, amp, memory_format
         )
-        val_loss, y_true, logits = evaluate(model, val_loader, criterion, device, amp)
+        val_loss, y_true, logits = evaluate(
+            model, val_loader, criterion, device, amp, memory_format
+        )
         metrics: MultilabelMetrics = evaluate_multilabel(y_true, sigmoid(logits))
 
         scheduler.step()

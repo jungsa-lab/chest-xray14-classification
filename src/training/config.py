@@ -16,9 +16,10 @@ from src.paths import PROJECT_ROOT
 
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "configs" / "train.yaml"
 
-# 결과(모델 가중치·지표)에 영향을 주지 않는 실행 환경 항목 → 실험 ID 계산에서 제외
+# 실행 환경·속도 옵션 → 실험 ID 계산에서 제외
+# (channels_last·cudnn_benchmark는 연산 순서만 바꿔 소수점 끝자리 수준의 차이만 생긴다)
 RUNTIME_FIELDS = frozenset({
-    "name", "device", "num_workers",
+    "name", "device", "num_workers", "channels_last", "cudnn_benchmark",
     "metadata_path", "raw_dir", "output_dir",
 })
 
@@ -41,6 +42,8 @@ class TrainConfig:
     seed: int = 42
     device: str = "auto"
     num_workers: int = 4
+    channels_last: bool = True
+    cudnn_benchmark: bool = True
     metadata_path: str = "data/processed/fold_metadata.csv"
     raw_dir: str = "data/raw"
     output_dir: str = "outputs/training"

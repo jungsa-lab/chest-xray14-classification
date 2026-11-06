@@ -1,9 +1,11 @@
-"""학습 파이프라인 테스트: 설정, Early Stopping, Fold 학습·이어서 학습, 요약표
+"""학습 파이프라인 테스트: 설정, Early Stopping, Fold 학습·이어서 학습, 시간 제한, 요약표, 작업 대기열
 
 실제 데이터 대신 작은 가짜 이미지와 아주 작은 모델을 사용해 수 초 안에 끝난다.
 """
 import json
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -11,33 +13,20 @@ import numpy as np
 import pandas as pd
 import torch
 from PIL import Image
-from torch import nn
 
 from src.constants import DISEASES
 from src.training import model as model_module
+from src.training import run as run_module
+from src.training import run_queue
 from src.training.config import TrainConfig, load_config, parse_overrides
 from src.training.summarize import write_summary
 from src.training.trainer import (
     BEST_FILE, HISTORY_FILE, LAST_FILE, PREDICTION_FILE, RESULT_FILE,
-    BestTracker, fold_dir, subsample, train_fold,
+    BestTracker, TimeLimitReached, fold_dir, subsample, train_fold,
 )
+from tests._tiny_run import TinyNet, register
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-
-class TinyNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.body = nn.Sequential(
-            nn.Conv2d(3, 4, kernel_size=8, stride=8),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten(),
-            nn.Linear(4, len(DISEASES)),
-        )
-
-    def forward(self, x):
-        return self.body(x)
 
 
 def make_fake_metadata(raw_dir: Path, n_train: int = 40, n_test: int = 5) -> pd.DataFrame:
@@ -69,11 +58,12 @@ class PipelineTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        model_module.MODEL_BUILDERS["tiny"] = lambda pretrained=True: TinyNet()
+        register()
 
     @classmethod
     def tearDownClass(cls):
         model_module.MODEL_BUILDERS.pop("tiny", None)
+        model_module.MODEL_BUILDERS.pop("tiny2", None)
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -352,6 +342,92 @@ class TestSummary(PipelineTestCase):
         self.train(TrainConfig(**{**quick, "gamma": 1.0, "use_clahe": False}))
         summary = write_summary(self.root / "outputs", self.root / "reports")
         self.assertEqual(summary["comparison_group"].nunique(), 2)
+
+
+
+class TestTimeLimit(PipelineTestCase):
+
+    def test_stops_before_epoch_that_cannot_finish(self):
+        # 기록이 없으면 첫 Epoch를 first_epoch_estimate(기본 30분)로 추정 → 시작하지 않음
+        with self.assertRaises(TimeLimitReached):
+            self.train(deadline=time.time() + 60)
+        self.assertFalse((fold_dir(self.cfg, 0) / HISTORY_FILE).exists())
+
+    def test_pause_then_resume_to_completion(self):
+        class Interrupt(Exception):
+            pass
+
+        def interrupt_at_epoch_1(msg):
+            if "epoch 01" in msg:
+                raise Interrupt
+
+        with self.assertRaises(Interrupt):
+            train_fold(self.cfg, 0, metadata=self.metadata, log=interrupt_at_epoch_1)
+
+        # 직전 Epoch 시간으로 추정 → 남은 시간이 거의 없으면 last.pt를 그대로 두고 멈춤
+        with self.assertRaises(TimeLimitReached):
+            self.train(deadline=time.time() + 1e-3)
+        self.assertTrue((fold_dir(self.cfg, 0) / LAST_FILE).is_file())
+
+        result = self.train(deadline=time.time() + 3600)
+        self.assertEqual(result["epochs_run"], 3)
+
+    def test_run_main_returns_exit_code(self):
+        metadata_path = self.root / "metadata.csv"
+        self.metadata.to_csv(metadata_path, index=False)
+        sets = []
+        for key, value in [("model", "tiny"), ("pretrained", "false"), ("device", "cpu"),
+                           ("num_workers", "0"), ("amp", "false"), ("epochs", "1"),
+                           ("batch_size", "8"), ("metadata_path", str(metadata_path)),
+                           ("raw_dir", str(self.root / "raw")),
+                           ("output_dir", str(self.root / "outputs"))]:
+            sets += ["--set", f"{key}={value}"]
+
+        paused = run_module.main(["--folds", "0", "--no-summary", "--time-limit-hours", "0.01", *sets])
+        self.assertEqual(paused, run_module.EXIT_TIME_LIMIT)
+        self.assertEqual(run_module.main(["--folds", "0", "--no-summary", *sets]), 0)
+
+
+class TestRunQueue(PipelineTestCase):
+    """실제 서브프로세스를 띄워 2개 'GPU'에서 1단계(gamma 0/1 × 5-Fold) → 2단계(5-Fold)까지 실행"""
+
+    def queue_args(self):
+        metadata_path = self.root / "metadata.csv"
+        self.metadata.to_csv(metadata_path, index=False)
+        sets = ["model=tiny", "pretrained=false", "device=cpu", "num_workers=0", "amp=false",
+                "epochs=1", "batch_size=8", "lr=0.01",
+                f"metadata_path={metadata_path}", f"raw_dir={self.root / 'raw'}",
+                f"output_dir={self.root / 'outputs'}"]
+        self.sets = sets
+        argv = ["--gpus", "a", "b", "--gammas", "0", "1", "--second-model", "tiny2",
+                "--report-dir", str(self.root / "reports"), "--poll-seconds", "0.2"]
+        for item in sets:
+            argv += ["--set", item]
+        return argv
+
+    def test_full_queue(self):
+        command = (sys.executable, "-m", "tests._tiny_run")
+        self.assertEqual(run_queue.main(self.queue_args(), command=command), 0)
+
+        selected = json.loads((self.root / "reports" / "selected_gamma.json").read_text())
+        (choice,) = selected.values()
+        # 2단계는 선택된 gamma로 실행됨 (큐와 같은 방식으로 설정을 만들어 확인)
+        stage2 = run_queue.make_jobs(
+            run_queue.DEFAULT_CONFIG_PATH, [*self.sets, "model=tiny2", f"gamma={choice['gamma']:g}"]
+        )
+        self.assertTrue(all(job.done for job in stage2))
+        self.assertEqual(stage2[0].cfg.gamma, choice["gamma"])
+
+        logs = list((self.root / "outputs" / "_logs").glob("*.log"))
+        self.assertEqual(len(logs), 15)
+
+        # 다시 실행하면 할 일이 없으므로 바로 완료
+        self.assertEqual(run_queue.main(self.queue_args(), command=command), 0)
+        self.assertEqual(len(list((self.root / "outputs" / "_logs").glob("*.log"))), 15)
+
+    def test_gamma_override_is_rejected(self):
+        with self.assertRaises(SystemExit):
+            run_queue.parse_args(["--set", "gamma=1"])
 
 
 if __name__ == "__main__":

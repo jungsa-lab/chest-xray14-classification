@@ -10,7 +10,7 @@
 name: ""
 
 # 모델
-model: densenet121         # densenet121 | efficientnet_b0
+model: densenet121          # densenet121 | efficientnet_b0
 pretrained: true            # ImageNet 사전학습 가중치
 
 # 입력
@@ -41,6 +41,8 @@ seed: 42
 # 실행 환경 (결과에 영향 없음 → 실험 ID에 포함되지 않음)
 device: auto                # auto | cuda | mps | cpu
 num_workers: 4
+channels_last: true         # CUDA 속도 최적화: 메모리 배치를 NHWC로 (Tensor Core 활용)
+cudnn_benchmark: true       # CUDA 속도 최적화: 입력 크기에 가장 빠른 합성곱 알고리즘 자동 선택
 
 # 경로 (상대 경로는 프로젝트 루트 기준)
 metadata_path: data/processed/fold_metadata.csv
