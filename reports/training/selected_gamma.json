@@ -1,0 +1,16 @@
+{
+  "densenet121-92109f": {
+    "gamma": 0.0,
+    "run_id": "densenet121_g0_clahe-52362096",
+    "mean_auroc": "0.8216 ± 0.0047",
+    "mean_auprc": "0.2464 ± 0.0074",
+    "mean_ece": "0.2284 ± 0.0140",
+    "compared_gammas": [
+      0.0,
+      1.0,
+      2.0
+    ],
+    "criterion": "5-Fold 검증 Mean AUROC 평균이 가장 높은 gamma. 같으면 Mean AUPRC가 높은 쪽, 그다음 ECE가 낮은 쪽.",
+    "note": "검증 데이터만 사용. Test 성능은 선택에 사용하지 않음."
+  }
+}
