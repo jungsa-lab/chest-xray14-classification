@@ -2,6 +2,7 @@ numpy
 pandas
 matplotlib
 scikit-learn
+scipy
 
 jupyter
 ipykernel
@@ -16,3 +17,6 @@ pyyaml
 # CLAHE 및 DICOM 실습
 opencv-python
 pydicom
+
+# Grad-CAM 폐 영역 분석 (해부학 분할, 가중치는 첫 실행 때 다운로드)
+torchxrayvision

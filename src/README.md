@@ -14,6 +14,7 @@ src/
 ├── evaluation/      # 모델 성능 평가
 ├── preprocessing/   # 데이터 전처리 및 분할
 ├── training/        # 모델 구성 및 학습
+├── xai/             # Grad-CAM 설명 및 에러 분석
 ├── constants.py     # 공통 상수
 └── paths.py         # 공통 경로
 ```
@@ -26,6 +27,7 @@ src/
 | `evaluation/` | 모델의 예측 결과를 바탕으로 성능을 계산하는 코드 |
 | `preprocessing/` | 원본 데이터를 검사하고 학습에 사용할 데이터를 준비하는 코드 |
 | `training/` | 딥러닝 모델을 정의하고 학습시키는 코드 |
+| `xai/` | Grad-CAM 히트맵, 폐 영역 분할, FP/FN·Shortcut 분석 코드 |
 
 ## 2. 폴더별 파일 구성
 
@@ -76,8 +78,24 @@ src/
 | 파일 | 역할 |
 |---|---|
 | `metrics.py` | 질환별 AUROC, AUPRC(AP), ECE 및 평균 성능 지표 계산 |
+| `tta_ensemble.py` | (GPU) Test·OOF 예측: H-Flip TTA, 2-Model Soft Voting Ensemble, 전후 비교 보고서 |
+| `common.py` | 예측 CSV 읽기, 정답·환자 정보 결합 등 평가 공통 함수 |
+| `calibration.py` | Reliability Diagram, ECE/MCE, Temperature Scaling (OOF로 추정 → Test 적용) |
+| `operating_point.py` | Youden's J, Spec@Sens90, Sens@Spec90, 스크리닝/확진 임계값 (`thresholds.json`) |
+| `subgroup.py` | 성별·연령대·View Position별 Mean AUROC, Bootstrap CI, 10% 차이 표시 |
+| `external_validation.py` | (GPU) CheXpert 외부 검증, 내부 대비 하락 폭, Domain Shift 근거표 |
 
-성능 지표를 추가하거나 평가 방법을 수정할 때 사용하는 폴더입니다.
+실행 순서: `tta_ensemble` → `calibration` → `operating_point` → `subgroup` → (`xai.gradcam_analysis`, `external_validation`).
+GPU가 필요한 단계는 `notebooks/kaggle_evaluate.ipynb`에서 실행하고, 나머지는 예측 CSV만 있으면 로컬에서 다시 돌릴 수 있습니다.
+결과는 `reports/evaluation/`에 저장됩니다.
+
+### `xai/` — 설명 가능 AI 및 에러 분석
+
+| 파일 | 역할 |
+|---|---|
+| `gradcam.py` | Grad-CAM (DenseNet `features`, EfficientNet `features[-1]`), 히트맵 오버레이. API에서도 사용 |
+| `anatomy.py` | 흉부 해부학 분할(torchxrayvision PSPNet)과 CAM 영역 비율 계산 |
+| `gradcam_analysis.py` | FP/FN 사례 Grad-CAM, 폐 영역 이탈·Shortcut Learning 분석 |
 
 ### `preprocessing/` — 데이터 전처리 및 분할
 
@@ -123,6 +141,7 @@ src/
 | 모델 구조 변경 및 새로운 모델 추가 | `training/` |
 | 손실 함수 또는 학습 방식 변경 | `training/` |
 | 새로운 성능 평가 지표 추가 | `evaluation/` |
+| Grad-CAM·에러 분석 변경 | `xai/` |
 | DICOM 파일 관련 기능 추가 | `dicom/` |
 | 질환 목록 또는 공통 경로 수정 | `constants.py`, `paths.py` |
 
