@@ -1,0 +1,6 @@
+﻿gamma,fold,best_epoch,checkpoint_path,size_bytes,sha256
+0,0,4,outputs/training/gamma0/fold0/best.pt,28477713,5717bcdfdb36359bcc908ae2a80483ecffc496c1cc052317ec431cccb4087c1c
+0,1,5,outputs/training/gamma0/fold1/best.pt,28477713,c3c1616dfdfc54dd3e34908e88cf97e61685d9c7e65efd746c894c180580948c
+0,2,5,outputs/training/gamma0/fold2/best.pt,28477713,38e6876229768f520f6ccc1da137da80c2c43182cd28c35def79e0b7e85663a0
+0,3,6,outputs/training/gamma0/fold3/best.pt,28477713,eb88bc2577c16066996f42ffa0f485f945c77af0850698b05420beb76133b94e
+0,4,6,outputs/training/gamma0/fold4/best.pt,28477713,284ad51353c6bbcae5c812818b731948da140c7de7ae66644f16c60ee74143f5

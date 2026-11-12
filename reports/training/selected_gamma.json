@@ -1,0 +1,6 @@
+{
+  "selected_gamma": 0,
+  "selection_scope": "Fold 0 검증 데이터만 사용",
+  "selection_rule": "Mean AUROC가 가장 높은 gamma 선택. 동률이면 Mean AUPRC가 높은 값, 그다음 Mean ECE가 낮은 값 선택",
+  "warning": "gamma=1과 gamma=2는 Fold 0에서만 평가함. gamma 선정에 사용한 Fold 0을 최종 5-Fold 평균에 포함했으므로 선택 편향이 발생할 수 있음. 본 결과는 검증 데이터 기준이며, 독립적인 Test 데이터의 평가 결과가 아님."
+}

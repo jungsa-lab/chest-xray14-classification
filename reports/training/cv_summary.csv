@@ -1,0 +1,2 @@
+﻿gamma,n_folds,folds,mean_auroc_mean,mean_auroc_std,mean_auroc,mean_auprc_mean,mean_auprc_std,mean_auprc,mean_ece_mean,mean_ece_std,mean_ece
+0,5,0 1 2 3 4,0.8264918506391853,0.003976060962780898,0.8265 ± 0.0040,0.2512340580371856,0.00832620334676768,0.2512 ± 0.0083,0.24572217467161805,0.017481823310401646,0.2457 ± 0.0175
