@@ -311,3 +311,4 @@ desktop.ini
 
 # 평가: 원시 logit(수십 MB)은 공유하지 않음. 예측 CSV·보고서·그림만 공유
 /reports/evaluation/*.npz
+/chest-xray14-code.zip
