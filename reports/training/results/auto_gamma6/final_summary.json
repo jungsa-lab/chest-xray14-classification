@@ -1,0 +1,11 @@
+{
+  "selected_gamma": 0,
+  "n_folds": 5,
+  "note": "Fold 0에서 감마 선정. 같은 Fold 0을 CV 평균에도 포함하므로 선택 편향 가능",
+  "mean_auroc_mean": 0.8313217968869218,
+  "mean_auroc_std": 0.0030637303206386673,
+  "mean_auprc_mean": 0.26151640751773153,
+  "mean_auprc_std": 0.007347260809141997,
+  "ece_mean": 0.22585982141215596,
+  "ece_std": 0.014981067966461927
+}

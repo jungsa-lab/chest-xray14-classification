@@ -1,0 +1,5 @@
+{
+  "gamma": 0,
+  "selection_fold": 0,
+  "criterion": "AUROC, then AUPRC, then lower ECE"
+}

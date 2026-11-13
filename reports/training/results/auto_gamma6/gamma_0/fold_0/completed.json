@@ -1,0 +1,12 @@
+{
+  "gamma": 0.0,
+  "fold": 0,
+  "best_epoch": 6,
+  "mean_auroc": 0.8283274758862376,
+  "mean_auprc": 0.2657396143026155,
+  "ece": 0.22411649343542225,
+  "train_size": 76315,
+  "val_size": 19079,
+  "max_epochs": 6,
+  "clahe": true
+}
