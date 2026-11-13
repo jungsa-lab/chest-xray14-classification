@@ -10,11 +10,42 @@ from src.evaluation.external_validation import mapped_scores, target_matrix
 from src.evaluation.metrics import _binary_ece
 from src.evaluation.operating_point import confusion_metrics, roc_targets, thresholds_for
 from src.evaluation.subgroup import add_groups, relative_gap
+from src.evaluation.tta_ensemble import MODEL_ORDER, decide_tta, oof_final_probs
 from src.xai.anatomy import region_fractions
 from src.xai.gradcam import GradCAM, overlay, target_layer
 from src.xai.gradcam_analysis import long_format, sample_positive_predictions, select_errors
 
 rng = np.random.default_rng(0)
+
+
+# --- TTA 결정 (OOF) ----------------------------------------------------------
+
+def _oof_logits(flip_noise: float):
+    """원본 logit은 정답과 상관, 반전 logit은 원본 + 잡음 (잡음이 크면 TTA가 손해)"""
+    n = 2000
+    y = (rng.random((n, len(DISEASES))) < 0.2).astype(np.float32)
+    folds = np.arange(n) % 5
+    logits = {}
+    for m in MODEL_ORDER:
+        orig = (y * 2 - 1) + rng.normal(0, 1.5, y.shape)
+        logits[f"{m}/orig"] = orig
+        logits[f"{m}/flip"] = orig + rng.normal(0, flip_noise, y.shape)
+    return logits, y, folds
+
+
+def test_tta_rejected_when_flip_hurts_oof():
+    logits, y, folds = _oof_logits(flip_noise=5.0)
+    d = decide_tta(logits, y, folds)
+    assert d["use"] is False and d["oof_mean_diff"] < 0
+    assert len(d["oof_fold_auroc_tta"]) == 5
+
+
+def test_oof_final_probs_respects_tta_flag():
+    logits, _, _ = _oof_logits(flip_noise=1.0)
+    no_tta = oof_final_probs(logits, tta=False)
+    expected = np.mean([1 / (1 + np.exp(-logits[f"{m}/orig"])) for m in MODEL_ORDER], axis=0)
+    np.testing.assert_allclose(no_tta, expected, rtol=1e-6)
+    assert not np.allclose(oof_final_probs(logits, tta=True), no_tta)
 
 
 # --- Calibration -----------------------------------------------------------

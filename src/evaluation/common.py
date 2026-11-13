@@ -4,6 +4,7 @@ tta_ensemble.py가 만든 예측 CSV만 읽으므로 GPU·이미지·모델 파�
     reports/evaluation/oof_predictions.csv   검증(OOF) 최종 확률 → 보정·임계값을 '정하는' 데이터
     reports/evaluation/test_predictions.csv  Test 최종 확률      → 정한 값을 '적용·보고하는' 데이터
 """
+import json
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +39,22 @@ def load_predictions(path: Path | str, metadata: pd.DataFrame) -> pd.DataFrame:
     if merged["Patient ID"].isna().any():
         raise ValueError("메타데이터에 없는 이미지가 예측 파일에 있습니다.")
     return merged
+
+
+def use_tta(eval_dir: Path | str) -> bool:
+    """최종 예측에 TTA를 썼는지 (tta_ensemble.py가 OOF로 정해 selected_runs.json에 기록)"""
+    path = Path(eval_dir) / "selected_runs.json"
+    if not path.exists():
+        raise SystemExit(f"{path}가 없습니다 (먼저 python -m src.evaluation.tta_ensemble 실행)")
+    tta = json.loads(path.read_text(encoding="utf-8")).get("tta")
+    if tta is None:
+        raise SystemExit(f"{path}에 TTA 결정이 없습니다 (tta_ensemble.py를 다시 실행)")
+    return bool(tta["use"])
+
+
+def final_label(eval_dir: Path | str) -> str:
+    """보고서·그림에 쓰는 최종 예측 방식 이름 (그림 글꼴 문제로 영문)"""
+    return "Ensemble + TTA" if use_tta(eval_dir) else "Ensemble"
 
 
 def probs(df: pd.DataFrame) -> np.ndarray:

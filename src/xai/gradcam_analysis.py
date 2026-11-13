@@ -9,7 +9,7 @@
     <output-dir>/<DenseNet run_id>/fold_k/best.pt
 
 판정과 설명의 역할 분리
-    - FP/FN 판정: 최종 시스템 예측(Ensemble + TTA, 보정 확률)과 Youden 임계값
+    - FP/FN 판정: 최종 시스템 예측(Ensemble, TTA는 OOF 결정대로, 보정 확률)과 Youden 임계값
     - Grad-CAM : DenseNet-121 Fold 모델 하나 (검증 Mean AUROC가 가장 높은 Fold, API와 같은 모델),
                  원본 방향 이미지로 계산 (TTA 반전 이미지는 위치 해석에 쓰지 않음)
 
@@ -35,7 +35,9 @@ from PIL import Image
 
 from src.constants import DISEASES
 from src.data.image_transforms import ChestXrayTransform
-from src.evaluation.common import EVAL_DIR, METADATA_PATH, load_metadata, load_predictions, md_table
+from src.evaluation.common import (
+    EVAL_DIR, METADATA_PATH, final_label, load_metadata, load_predictions, md_table,
+)
 from src.paths import PROJECT_ROOT
 from src.training.trainer import BEST_FILE, N_FOLDS, select_device
 from src.xai.anatomy import EXPECTED_REGIONS, dominant_outside, region_fractions
@@ -233,7 +235,7 @@ def main(argv=None) -> int:
         print(f"[{kind}] {len(cases)}건 Grad-CAM")
         table, visuals = run_cases(renderer, cases)
         plot_cases(table, visuals, f"{'False Positive' if kind == 'FP' else 'False Negative'} cases "
-                   f"(Ensemble+TTA decision, DenseNet-121 fold {fold} Grad-CAM)",
+                   f"({final_label(eval_dir)} decision, DenseNet-121 fold {fold} Grad-CAM)",
                    fig_dir / f"{kind.lower()}_cases.png", gt_text)
         tables[kind] = table
 
@@ -256,19 +258,20 @@ def main(argv=None) -> int:
                    "Lowest in-region Grad-CAM (possible shortcut)", fig_dir / "out_of_region_cases.png", gt_text)
 
     (out_dir / "gradcam_analysis.md").write_text(
-        markdown(errors, region, fold, runs[CAM_MODEL]["run_id"], args), encoding="utf-8")
+        markdown(errors, region, fold, runs[CAM_MODEL]["run_id"], args, final_label(eval_dir)), encoding="utf-8")
     print(f"저장 위치: {out_dir}")
     return 0
 
 
-def markdown(errors: pd.DataFrame, region: pd.DataFrame | None, fold: int, run_id: str, args) -> str:
+def markdown(errors: pd.DataFrame, region: pd.DataFrame | None, fold: int, run_id: str, args,
+             method_label: str) -> str:
     cols = ["case", "Image Index", "disease", "prob", "threshold", "gt_labels"]
     if "frac_expected" in errors:
         cols += ["frac_expected", "outside_hint"]
     lines = [
         "# Grad-CAM 에러 분석 (Test)",
         "",
-        f"- 판정: Ensemble + TTA 보정 확률, 임계값 = {args.criterion} (검증에서 정함)",
+        f"- 판정: {method_label} 보정 확률, 임계값 = {args.criterion} (검증에서 정함)",
         f"- Grad-CAM: DenseNet-121 `{run_id}` Fold {fold}, 대상 레이어 `features` (마지막 Dense Block 출력, 7×7)",
         "- 영역 비율(frac_expected): CAM 에너지 중 질환별 기대 영역(기본 폐, 경계 7px 팽창) 안 비율. "
         f"{OUT_OF_REGION:.0%} 미만이면 '이탈'",
@@ -288,7 +291,8 @@ def markdown(errors: pd.DataFrame, region: pd.DataFrame | None, fold: int, run_i
         "",
         "![FN](figures/fn_cases.png)",
         "",
-        "> TODO(팀): `error_cases.csv`의 '원인', '오류 유형(모델/라벨)' 열을 그림을 보고 채운 뒤 이 표에 반영.",
+        "> TODO(팀): `error_cases.csv`의 '원인', '오류 유형(모델/라벨)' 열을 그림을 보고 채운다. "
+        "분석 본문·방법 한계: [`../discussion.md`](../discussion.md) 3절.",
         "> NIH 라벨은 판독문에서 NLP로 추출해 오류가 있다. GT 목록과 영상을 보고 '라벨 오류 가능' 사례를 구분한다.",
         "",
     ]
@@ -314,7 +318,8 @@ def markdown(errors: pd.DataFrame, region: pd.DataFrame | None, fold: int, run_i
             "",
             "## Shortcut Learning 판정",
             "",
-            "> TODO(팀): 이탈 사례 그림을 보고 `region_analysis.csv`의 'Shortcut 판정' 열을 채운다.",
+            "> TODO(팀): 이탈 사례 그림을 보고 `region_analysis.csv`의 'Shortcut 판정' 열을 채운다 "
+            "(정리는 [`../discussion.md`](../discussion.md) 3절).",
             "> - 의료기기(심박조율기, 튜브, 카테터)·텍스트/마커 강조 → Shortcut 의심 (질환과 함께 나타나는 표식을 학습)",
             "> - 뼈(쇄골·늑골) 강조 → 겹친 구조의 오인 가능성",
             "> - 개선 방향: 폐 마스킹 입력, 장비·텍스트 영역 가리기 Augmentation, 장비 유무별 성능 비교",

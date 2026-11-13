@@ -12,18 +12,25 @@
        - TTA          : (원본 확률 + 반전 확률) / 2
        - Single Model : 한 모델 종류의 Fold별 성능 Mean ± Std, 그리고 5개 Fold 모델 확률 평균
        - Ensemble     : DenseNet-121과 EfficientNet-B0 확률의 단순 평균 (Soft Voting, 가중치 0.5:0.5)
-       가중치·TTA 여부를 Test 점수로 고르지 않고 미리 정한 방식 그대로 보고한다.
+       가중치는 Test 점수로 고르지 않고 미리 정한 값(0.5:0.5)을 쓴다.
+    4. 최종 예측의 TTA 사용 여부는 OOF(검증)로 정한다 (decide_tta, Test는 보지 않음).
+       Fold k 검증 이미지에서 Ensemble Mean AUROC를 TTA 있음/없음으로 구해,
+       5개 Fold 평균 차이가 0보다 크면 TTA를 쓴다. Test 표에는 두 경우를 모두 보고한다.
 
 출력 (--report-dir, 기본 reports/evaluation/)
     test_logits.npz           모델·Fold·시점(원본/반전)별 logit, 정답, 이미지명 (재계산 없이 다시 분석 가능)
     test_metrics.csv          모든 조합의 Mean AUROC / AUPRC / ECE
     test_per_disease_auroc.csv  질환별 AUROC (TTA 전후, 모델별)
-    test_predictions.csv      최종(Ensemble + TTA) 질환별 확률
+    test_predictions.csv      최종(Ensemble, TTA는 OOF 결정대로) 질환별 확률
     oof_logits.npz            검증(OOF) logit: Fold k 이미지를 Fold k 모델(2종류 × 원본/반전)로 예측
-    oof_predictions.csv       OOF 최종(Ensemble + TTA) 확률 — Temperature·임계값 추정용 (Test 대신)
-    tta_comparison.md         TTA 적용 전후 Mean AUROC 비교 + 제한사항
+    oof_predictions.csv       OOF 최종 확률 (Test와 같은 TTA 결정) — Temperature·임계값 추정용 (Test 대신)
+    tta_comparison.md         TTA 적용 전후 Mean AUROC 비교 + OOF 기준 TTA 결정 + 제한사항
     ensemble_comparison.md    Single Model 대비 Ensemble 향상 폭
-    selected_runs.json        평가에 쓴 실험과 선택 기준
+    selected_runs.json        평가에 쓴 실험, 선택 기준, TTA 결정 (이후 단계가 읽음)
+
+GPU 없이 다시 계산
+    test_logits.npz·oof_logits.npz·selected_runs.json이 --report-dir에 있으면
+    학습 결과(--output-dir)와 이미지 없이 표·예측 CSV만 다시 만든다.
 
 OOF 예측
     Temperature Scaling과 Operating Point 임계값은 Test가 아니라 OOF로 정해야 한다.
@@ -64,6 +71,10 @@ LATERALITY_DISEASES = ("Cardiomegaly",)
 SELECTION_RULE = (
     "모델 종류마다 5-Fold를 모두 마친 실험 중 검증 Mean AUROC 평균이 가장 높은 실험 "
     "(같으면 AUPRC가 높은 쪽, 그다음 ECE가 낮은 쪽). Test 성능은 선택에 사용하지 않음."
+)
+TTA_RULE = (
+    "OOF(Fold k 검증 이미지를 Fold k 모델로 예측)에서 2-Model Ensemble의 Fold별 Mean AUROC를 "
+    "TTA 있음/없음으로 계산해, 5개 Fold 평균 차이(TTA − 없음)가 0보다 크면 TTA 사용. Test 성능은 사용하지 않음."
 )
 
 
@@ -197,12 +208,47 @@ def build_predictions(
     return preds
 
 
-def oof_final_probs(logits: dict[str, np.ndarray]) -> np.ndarray:
-    """OOF 최종 확률: 모델 종류별 (원본 + 반전)/2 를 다시 모델 평균 (Test 최종 예측과 같은 방식)"""
-    per_model = [
-        (sigmoid(logits[f"{m}/orig"]) + sigmoid(logits[f"{m}/flip"])) / 2 for m in MODEL_ORDER
-    ]
+def oof_final_probs(logits: dict[str, np.ndarray], tta: bool) -> np.ndarray:
+    """OOF 최종 확률: 모델 종류별 확률(tta면 (원본 + 반전)/2)을 다시 모델 평균 (Test 최종 예측과 같은 방식)"""
+    per_model = []
+    for m in MODEL_ORDER:
+        p = sigmoid(logits[f"{m}/orig"])
+        if tta:
+            p = (p + sigmoid(logits[f"{m}/flip"])) / 2
+        per_model.append(p)
     return np.mean(per_model, axis=0)
+
+
+def decide_tta(logits: dict[str, np.ndarray], y_true: np.ndarray, folds: np.ndarray) -> dict:
+    """OOF로 최종 예측의 TTA 사용 여부 결정 (TTA_RULE). Test는 사용하지 않는다."""
+    scores = {False: [], True: []}
+    for tta in scores:
+        p = oof_final_probs(logits, tta)
+        for k in range(N_FOLDS):
+            mask = folds == k
+            scores[tta].append(float(evaluate_multilabel(y_true[mask], p[mask]).mean_auroc))
+    base, flip = np.array(scores[False]), np.array(scores[True])
+    diff = flip - base
+    return {
+        "use": bool(diff.mean() > 0),
+        "rule": TTA_RULE,
+        "oof_fold_auroc_no_tta": [round(v, 6) for v in base],
+        "oof_fold_auroc_tta": [round(v, 6) for v in flip],
+        "oof_mean_diff": round(float(diff.mean()), 6),
+        "folds_improved": int((diff > 0).sum()),
+    }
+
+
+def load_runs(output_dir: Path, report_dir: Path, run_ids: list[str] | None) -> dict[str, dict]:
+    """학습 결과가 있으면 검증 성능으로 선택, 없으면 이전 평가의 selected_runs.json 사용 (GPU 없이 재계산)"""
+    saved = report_dir / "selected_runs.json"
+    if not collect_results(output_dir) and saved.exists():
+        runs = json.loads(saved.read_text(encoding="utf-8"))["runs"]
+        if run_ids and sorted(r["run_id"] for r in runs.values()) != sorted(run_ids):
+            raise SystemExit(f"--runs가 {saved}의 실험과 다릅니다.")
+        print(f"학습 결과가 없어 이전 선택을 사용: {saved}")
+        return runs
+    return select_runs(output_dir, run_ids)
 
 
 def predict_oof(
@@ -288,7 +334,33 @@ def _label(method: str) -> str:
 # 4. 보고서
 # ---------------------------------------------------------------------------
 
-def tta_markdown(metrics, per_disease, runs, n_test) -> str:
+def tta_decision_markdown(decision: dict | None) -> list[str]:
+    if decision is None:
+        return ["## 최종 예측의 TTA 사용 여부", "",
+                "- OOF 예측을 생략(--skip-oof)해 검증으로 정할 수 없음 → **TTA 사용 안 함** (기본값)", ""]
+    base = np.array(decision["oof_fold_auroc_no_tta"])
+    tta = np.array(decision["oof_fold_auroc_tta"])
+    lines = [
+        "## 최종 예측의 TTA 사용 여부 (OOF로 결정)",
+        "",
+        f"- 규칙: {decision['rule']}",
+        "",
+        "| Fold | TTA 없음 | TTA (H-Flip) | 변화 |",
+        "| --- | --- | --- | --- |",
+    ]
+    lines += [f"| {k} | {b:.4f} | {t:.4f} | {t - b:+.4f} |" for k, (b, t) in enumerate(zip(base, tta))]
+    lines += [
+        f"| 평균 | {base.mean():.4f} | {tta.mean():.4f} | {decision['oof_mean_diff']:+.4f} |",
+        "",
+        f"- TTA로 오른 Fold: {decision['folds_improved']}/{len(base)}",
+        f"- **결정: TTA {'사용' if decision['use'] else '사용 안 함'}** → `test_predictions.csv`·`oof_predictions.csv`와 "
+        "이후 Calibration·Operating Point·Subgroup·Grad-CAM·External 모두 이 방식의 확률을 사용",
+        "",
+    ]
+    return lines
+
+
+def tta_markdown(metrics, per_disease, runs, n_test, decision) -> str:
     lines = [
         "# Test-Time Augmentation (Horizontal Flip) 전후 비교",
         "",
@@ -296,7 +368,8 @@ def tta_markdown(metrics, per_disease, runs, n_test) -> str:
         "- TTA: 원본과 좌우 반전 이미지의 예측 확률 평균",
         f"- 모델: " + ", ".join(f"{_label(m)} `{runs[m]['run_id']}`" for m in MODEL_ORDER),
         "",
-        "## Mean AUROC",
+        *tta_decision_markdown(decision),
+        "## Test Mean AUROC (참고 보고, 결정에는 사용하지 않음)",
         "",
         "Fold별 = Fold 모델 하나씩 평가한 5개 값의 Mean ± Std, 5-Fold 평균 = 5개 Fold 모델 확률을 평균낸 예측",
         "",
@@ -350,14 +423,16 @@ def tta_markdown(metrics, per_disease, runs, n_test) -> str:
     return "\n".join(lines)
 
 
-def ensemble_markdown(metrics, runs, n_test) -> str:
+def ensemble_markdown(metrics, runs, n_test, use_tta: bool) -> str:
     base = MODEL_ORDER[0]
+    other = "TTA 적용" if not use_tta else "TTA 없는"
     lines = [
         "# 2-Model Soft Voting Ensemble",
         "",
         f"- 데이터: Test {n_test:,}장",
         f"- 구성: {_label(MODEL_ORDER[0])} + {_label(MODEL_ORDER[1])}, 질환별 확률의 단순 평균 (가중치 0.5 : 0.5, Test로 조정하지 않음)",
-        "- 두 모델 모두 H-Flip TTA 적용 확률 사용 (TTA 없는 결과는 아래 표에 함께 표시)",
+        f"- 최종 예측: {'H-Flip TTA 적용 확률' if use_tta else 'TTA 없이 원본 이미지 확률'} 사용 "
+        f"(OOF로 결정, `tta_comparison.md` 참고). {other} 결과는 아래 표에 함께 표시",
         "",
         "## 사용한 모델 (검증 성능으로 선택)",
         "",
@@ -368,8 +443,10 @@ def ensemble_markdown(metrics, runs, n_test) -> str:
         r = runs[m]
         lines.append(f"| {_label(m)} | `{r['run_id']}` | {r['gamma']:g} | {r['val_mean_auroc']} |")
 
-    for tta in (True, False):
+    for tta in (use_tta, not use_tta):                  # 최종 예측 방식을 먼저
         title = "TTA 적용" if tta else "TTA 없음"
+        if tta == use_tta:
+            title += ", 최종"
         lines += ["", f"## Fold별 비교 ({title}, Mean ± Std)", "",
                   "Fold k의 Ensemble = DenseNet Fold k 모델 + EfficientNet Fold k 모델 (같은 학습 데이터로 학습한 두 모델)", "",
                   "| 방식 | Mean AUROC | Mean AUPRC | ECE |", "| --- | --- | --- | --- |"]
@@ -426,7 +503,7 @@ def main(argv=None) -> int:
     report_dir = Path(args.report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
 
-    runs = select_runs(output_dir, args.runs)
+    runs = load_runs(output_dir, report_dir, args.runs)
     print("[평가할 모델] " + SELECTION_RULE)
     for m in MODEL_ORDER:
         print(f"  {_label(m)}: {runs[m]['run_id']} (검증 AUROC {runs[m]['val_mean_auroc']})")
@@ -485,7 +562,7 @@ def main(argv=None) -> int:
                     and bool(data["limited"]) == (args.limit is not None)):
                 print(f"저장된 OOF 예측 사용: {oof_cache}")
                 oof = ({f"{m}/{v}": data[f"{m}/{v}"] for m in MODEL_ORDER for v in VIEWS},
-                       data["image_names"].tolist(), data["folds"])
+                       data["labels"], data["image_names"].tolist(), data["folds"])
         if oof is None:
             started = time.time()
             oof_logits, oof_y, oof_names, oof_folds = predict_oof(
@@ -495,29 +572,37 @@ def main(argv=None) -> int:
                 oof_cache, labels=oof_y, image_names=np.array(oof_names), folds=oof_folds,
                 run_ids=np.array([runs[m]["run_id"] for m in MODEL_ORDER]),
                 limited=np.array(args.limit is not None), **oof_logits)
-            oof = (oof_logits, oof_names, oof_folds)
-        oof_logits, oof_names, oof_folds = oof
-        table = pd.DataFrame(oof_final_probs(oof_logits), columns=DISEASES)
+            oof = (oof_logits, oof_y, oof_names, oof_folds)
+        oof_logits, oof_y, oof_names, oof_folds = oof
+        decision = decide_tta(oof_logits, oof_y, oof_folds)
+        use_tta = decision["use"]
+        print(f"[TTA 결정] OOF Ensemble Mean AUROC 변화 {decision['oof_mean_diff']:+.4f} "
+              f"(오른 Fold {decision['folds_improved']}/{N_FOLDS}) → TTA {'사용' if use_tta else '사용 안 함'}")
+        table = pd.DataFrame(oof_final_probs(oof_logits, use_tta), columns=DISEASES)
         table.insert(0, "Fold", oof_folds)
         table.insert(0, "Image Index", oof_names)
         table.to_csv(report_dir / "oof_predictions.csv", index=False, float_format="%.6f")
+    else:
+        decision, use_tta = None, False
+        print("[TTA 결정] OOF 생략 → 검증 근거가 없으므로 TTA 사용 안 함")
 
     preds = build_predictions(logits, runs)
     metrics, per_disease = score_all(preds, y_true)
 
     metrics.to_csv(report_dir / "test_metrics.csv", index=False)
     per_disease.to_csv(report_dir / "test_per_disease_auroc.csv", index=False)
-    final = pd.DataFrame(preds[("ensemble", "5fold", True)], columns=DISEASES)
+    final = pd.DataFrame(preds[("ensemble", "5fold", use_tta)], columns=DISEASES)
     final.insert(0, "Image Index", names)
     final.to_csv(report_dir / "test_predictions.csv", index=False, float_format="%.6f")
 
     n_test = len(y_true)
     (report_dir / "tta_comparison.md").write_text(
-        tta_markdown(metrics, per_disease, runs, n_test), encoding="utf-8")
+        tta_markdown(metrics, per_disease, runs, n_test, decision), encoding="utf-8")
     (report_dir / "ensemble_comparison.md").write_text(
-        ensemble_markdown(metrics, runs, n_test), encoding="utf-8")
+        ensemble_markdown(metrics, runs, n_test, use_tta), encoding="utf-8")
     (report_dir / "selected_runs.json").write_text(json.dumps(
-        {"criterion": SELECTION_RULE, "n_test": n_test, "limit": args.limit, "runs": runs},
+        {"criterion": SELECTION_RULE, "n_test": n_test, "limit": args.limit, "runs": runs,
+         "tta": decision or {"use": False, "rule": "OOF 생략(--skip-oof) → 기본값 사용 안 함"}},
         ensure_ascii=False, indent=2), encoding="utf-8")
 
     view = metrics[metrics["unit"].eq("5fold")].copy()

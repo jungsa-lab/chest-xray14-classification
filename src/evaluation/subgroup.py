@@ -24,7 +24,7 @@ import pandas as pd
 
 from src.constants import DISEASES
 from src.evaluation.common import (
-    EVAL_DIR, METADATA_PATH, load_metadata, load_predictions, md_table, safe_auroc,
+    EVAL_DIR, METADATA_PATH, final_label, load_metadata, load_predictions, md_table, safe_auroc,
 )
 
 MIN_COUNT = 10
@@ -113,7 +113,7 @@ def run(eval_dir: Path, metadata: pd.DataFrame, n_bootstrap: int = N_BOOTSTRAP) 
 
     flags = find_flags(metrics, per_disease)
     (eval_dir / "subgroup.md").write_text(
-        markdown(metrics, per_disease, context, flags, len(test)), encoding="utf-8")
+        markdown(metrics, per_disease, context, flags, len(test), final_label(eval_dir)), encoding="utf-8")
     print(metrics.to_string(index=False, float_format="%.4f"))
     print(f"\n10% 이상 차이: {len(flags)}건")
     return {"metrics": metrics, "flags": flags}
@@ -136,11 +136,11 @@ def find_flags(metrics: pd.DataFrame, per_disease: pd.DataFrame) -> pd.DataFrame
     return pd.DataFrame(rows, columns=["attribute", "disease", "relative_gap", "best", "worst"])
 
 
-def markdown(metrics, per_disease, context, flags, n_test) -> str:
+def markdown(metrics, per_disease, context, flags, n_test, method_label) -> str:
     lines = [
         "# Subgroup Analysis (Test)",
         "",
-        f"- 데이터: Test {n_test:,}장, Ensemble + TTA (보정 확률, AUROC는 보정과 무관)",
+        f"- 데이터: Test {n_test:,}장, {method_label} (보정 확률, AUROC는 보정과 무관)",
         f"- 질환별 AUROC는 그룹 안에 양성·음성이 각각 {MIN_COUNT}개 이상일 때만 계산. "
         "Mean AUROC는 같은 속성의 모든 그룹에서 계산 가능한 질환만 평균",
         f"- 95% CI: 환자 단위 Bootstrap {N_BOOTSTRAP}회",
@@ -181,7 +181,7 @@ def markdown(metrics, per_disease, context, flags, n_test) -> str:
         "",
         "## 원인 분석",
         "",
-        "> TODO(팀): 위 표의 그룹 특성을 근거로 작성. 확인할 가설:",
+        "> 분석 본문: [`discussion.md`](discussion.md) 1절 (직접 작성, 다시 실행해도 덮어쓰지 않음). 확인한 가설:",
         "> - View Position: AP는 누워서·이동형 장비로 찍는 중환자 영상이 많다(화질 저하, 심장 확대 왜곡, 의료기기). "
         "AP 비율과 나이·동반 질환 수가 함께 다르므로 단일 원인으로 단정하지 않는다.",
         "> - 연령대: 젊은 층은 유병률이 낮아 양성 수가 적고(CI 넓음), 고령층은 여러 질환이 겹쳐 판별이 어렵다.",

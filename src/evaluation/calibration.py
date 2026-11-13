@@ -37,7 +37,7 @@ from scipy.optimize import minimize
 from src.constants import DISEASES
 from src.evaluation.common import (
     EVAL_DIR, METADATA_PATH, labels, load_metadata, load_predictions, md_table, probs,
-    to_logit, to_prob,
+    final_label, to_logit, to_prob,
 )
 
 N_BINS = 15                      # 학습 보고서의 ECE와 같은 구간 수
@@ -184,7 +184,7 @@ def choose(oof_ece: dict[str, float]) -> str:
 # ---------------------------------------------------------------------------
 
 def plot_reliability(y: np.ndarray, before: np.ndarray, after: np.ndarray,
-                     after_label: str, path: Path) -> None:
+                     after_label: str, path: Path, method_label: str) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -206,7 +206,7 @@ def plot_reliability(y: np.ndarray, before: np.ndarray, after: np.ndarray,
         ax.set_xlabel("Mean predicted probability")
     for ax in axes[:, 0]:
         ax.set_ylabel("Observed positive rate")
-    fig.suptitle("Reliability Diagram (Test, Ensemble + TTA)", fontsize=14)
+    fig.suptitle(f"Reliability Diagram (Test, {method_label})", fontsize=14)
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=110)
@@ -265,7 +265,7 @@ def run(eval_dir: Path, metadata: pd.DataFrame) -> dict:
             out.insert(1, "Fold", folds)
         out.to_csv(eval_dir / f"{name}_predictions_calibrated.csv", index=False, float_format="%.6f")
     plot_reliability(y_test, p_test, test_cal[chosen], PLOT_LABELS[chosen],
-                     eval_dir / "figures" / "reliability_diagram.png")
+                     eval_dir / "figures" / "reliability_diagram.png", final_label(eval_dir))
 
     before = table.set_index("method").loc["none"]
     after = table.set_index("method").loc[chosen]

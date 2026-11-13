@@ -19,10 +19,10 @@
 불확실 라벨(-1) 처리: U-Ignore(해당 질환 평가에서 제외, 기본) / U-Zeros(음성) / U-Ones(양성) 모두 보고.
 빈칸은 '언급 없음' = 음성.
 
-예측: Test와 같은 방식 (2종류 × 5 Fold × 원본/반전 평균) + calibration.json 보정.
+예측: Test와 같은 방식 (2종류 × 5 Fold 평균, TTA는 selected_runs.json의 OOF 결정대로) + calibration.json 보정.
 
 출력 (reports/evaluation/external/)
-    external_predictions.csv, external_metrics.csv, external_validation.md
+    external_predictions.csv (+ 만든 설정 external_predictions.json), external_metrics.csv, external_validation.md
 """
 import argparse
 import json
@@ -40,6 +40,7 @@ from src.data.image_transforms import ChestXrayTransform
 from src.evaluation import calibration
 from src.evaluation.common import (
     EVAL_DIR, METADATA_PATH, labels, load_metadata, load_predictions, md_table, probs, safe_auroc,
+    use_tta,
 )
 from src.evaluation.metrics import _binary_ece
 from src.evaluation.tta_ensemble import (
@@ -167,13 +168,16 @@ def run(args) -> int:
     df = prepare_chexpert(args.chexpert_csv, args.sample)
     print(f"CheXpert 정면 영상: {len(df):,}장, 환자 {df['Patient ID'].nunique():,}명")
 
-    cache = out_dir / "external_predictions.csv"
-    if cache.exists() and not args.recompute:
-        pred = pd.read_csv(cache)
-        if pred["Path"].tolist() != df["Path"].tolist():
-            pred = None
-    else:
-        pred = None
+    tta = use_tta(eval_dir)
+    views = VIEWS if tta else ("orig",)
+    setting = {"tta": tta, "calibration": calib}          # 이 설정이 바뀌면 저장된 예측을 다시 계산
+    cache, cache_setting = out_dir / "external_predictions.csv", out_dir / "external_predictions.json"
+    pred = None
+    if cache.exists() and cache_setting.exists() and not args.recompute:
+        if json.loads(cache_setting.read_text(encoding="utf-8")) == setting:
+            pred = pd.read_csv(cache)
+            if pred["Path"].tolist() != df["Path"].tolist():
+                pred = None
 
     if pred is None:
         runs = select_runs(Path(args.output_dir), args.runs)
@@ -189,7 +193,7 @@ def run(args) -> int:
         logits, _, _ = predict(models, loader, device, cuda, memory_format)
         print(f"예측 완료: {time.time() - started:.0f}s")
         per_model = [np.mean([sigmoid(logits[f"{runs[m]['run_id']}/fold{k}/{v}"])
-                              for k in range(N_FOLDS) for v in VIEWS], axis=0) for m in MODEL_ORDER]
+                              for k in range(N_FOLDS) for v in views], axis=0) for m in MODEL_ORDER]
         p = calibration.apply(np.mean(per_model, axis=0), calib)
         stats = pd.DataFrame([{k: dataset[i][k] for k in ("width", "height", "brightness")}
                               for i in range(0, len(dataset), max(1, len(dataset) // 500))])
@@ -197,6 +201,7 @@ def run(args) -> int:
         pred = pd.DataFrame(p, columns=DISEASES)
         pred.insert(0, "Path", df["Path"].to_numpy())
         pred.to_csv(cache, index=False, float_format="%.6f")
+        cache_setting.write_text(json.dumps(setting, ensure_ascii=False, indent=2), encoding="utf-8")
 
     p_ext = pred[DISEASES].to_numpy()
     s_ext = mapped_scores(p_ext)
@@ -285,7 +290,7 @@ def markdown(df, ext, internal, test, metadata, p_ext, out_dir, args) -> str:
         "",
         "## Domain Shift 원인 분석",
         "",
-        "> TODO(팀): 위 근거표 수치로 3가지 이상 작성. 확인할 가설:",
+        "> 분석 본문: [`../discussion.md`](../discussion.md) 2절 (직접 작성, 다시 실행해도 덮어쓰지 않음). 확인한 가설:",
         "> 1. **기관·장비**: NIH(NIH Clinical Center) vs CheXpert(Stanford). 장비·촬영 프로토콜·후처리 차이 → 밝기·대비 분포(위 표).",
         "> 2. **라벨링 방식**: 둘 다 판독문 NLP 추출이지만 추출기·규칙이 다르다(CheXpert는 불확실 라벨 분리). "
         "valid.csv는 전문의 합의 라벨이라 '정답' 기준 자체가 다르다. U-Ignore/U-Zeros/U-Ones 차이가 크면 라벨 정의 차이가 큰 질환.",
