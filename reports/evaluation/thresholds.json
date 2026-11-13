@@ -1,0 +1,53 @@
+{
+  "default": "youden",
+  "probability": "보정 확률 (calibration.json: prior_temperature)",
+  "fit_on": "OOF (검증) 예측",
+  "youden": {
+    "Atelectasis": 0.09479,
+    "Cardiomegaly": 0.023886,
+    "Effusion": 0.119381,
+    "Infiltration": 0.177248,
+    "Mass": 0.054611,
+    "Nodule": 0.062329,
+    "Pneumonia": 0.0133,
+    "Pneumothorax": 0.05281,
+    "Consolidation": 0.04283,
+    "Edema": 0.017423,
+    "Emphysema": 0.025559,
+    "Fibrosis": 0.015035,
+    "Pleural_Thickening": 0.028761,
+    "Hernia": 0.003989
+  },
+  "sens90": {
+    "Atelectasis": 0.054006,
+    "Cardiomegaly": 0.014559,
+    "Effusion": 0.072496,
+    "Infiltration": 0.103159,
+    "Mass": 0.022606,
+    "Nodule": 0.027154,
+    "Pneumonia": 0.003501,
+    "Pneumothorax": 0.022762,
+    "Consolidation": 0.020703,
+    "Edema": 0.010621,
+    "Emphysema": 0.01284,
+    "Fibrosis": 0.004585,
+    "Pleural_Thickening": 0.012509,
+    "Hernia": 0.000442
+  },
+  "spec90": {
+    "Atelectasis": 0.220799,
+    "Cardiomegaly": 0.051331,
+    "Effusion": 0.253758,
+    "Infiltration": 0.311122,
+    "Mass": 0.097196,
+    "Nodule": 0.102795,
+    "Pneumonia": 0.032111,
+    "Pneumothorax": 0.08977,
+    "Consolidation": 0.10924,
+    "Edema": 0.06024,
+    "Emphysema": 0.035139,
+    "Fibrosis": 0.038755,
+    "Pleural_Thickening": 0.072544,
+    "Hernia": 0.002982
+  }
+}

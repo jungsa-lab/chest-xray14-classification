@@ -1,0 +1,41 @@
+{
+  "tta": false,
+  "calibration": {
+    "method": "prior_temperature",
+    "log_pos_weight": {
+      "Atelectasis": 2.162012340587483,
+      "Cardiomegaly": 3.680403738805454,
+      "Effusion": 1.9998246423962136,
+      "Infiltration": 1.533480914948177,
+      "Mass": 2.912182678371734,
+      "Nodule": 2.814718965024558,
+      "Pneumonia": 4.412305051538736,
+      "Pneumothorax": 3.008185045371441,
+      "Consolidation": 3.13542858621199,
+      "Edema": 3.8591147287912846,
+      "Emphysema": 3.7943054750107166,
+      "Fibrosis": 4.203140451360175,
+      "Pleural_Thickening": 3.46670928624903,
+      "Hernia": 6.2489044996707515
+    },
+    "temperature": {
+      "Atelectasis": 1.0388530989654061,
+      "Cardiomegaly": 1.0267901418093128,
+      "Effusion": 0.9841370944638115,
+      "Infiltration": 1.0148412729708385,
+      "Mass": 1.0889796993760044,
+      "Nodule": 1.0507921920394205,
+      "Pneumonia": 1.0404253276038065,
+      "Pneumothorax": 1.1188878206265238,
+      "Consolidation": 1.0103573789404916,
+      "Edema": 1.0172672753845067,
+      "Emphysema": 1.195491886609543,
+      "Fibrosis": 1.083515904698535,
+      "Pleural_Thickening": 1.0784014026456599,
+      "Hernia": 1.4033167654524608
+    },
+    "fit_on": "OOF (검증) 예측 전체",
+    "n_bins": 15,
+    "selection_rule": "Temperature 계열 중 OOF 교차 추정 ECE ≤ 0.10인 첫 방법, 없으면 OOF ECE 최소"
+  }
+}

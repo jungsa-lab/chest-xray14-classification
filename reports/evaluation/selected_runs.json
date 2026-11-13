@@ -1,0 +1,41 @@
+{
+  "criterion": "모델 종류마다 5-Fold를 모두 마친 실험 중 검증 Mean AUROC 평균이 가장 높은 실험 (같으면 AUPRC가 높은 쪽, 그다음 ECE가 낮은 쪽). Test 성능은 선택에 사용하지 않음.",
+  "n_test": 16724,
+  "limit": null,
+  "runs": {
+    "densenet121": {
+      "run_id": "densenet121_g0_clahe-52362096",
+      "gamma": 0.0,
+      "val_mean_auroc": "0.8216 ± 0.0047",
+      "val_mean_auprc": "0.2464 ± 0.0074",
+      "val_mean_ece": "0.2284 ± 0.0140"
+    },
+    "efficientnet_b0": {
+      "run_id": "efficientnet_b0_g0_clahe-b70ecc0f",
+      "gamma": 0.0,
+      "val_mean_auroc": "0.8148 ± 0.0017",
+      "val_mean_auprc": "0.2284 ± 0.0107",
+      "val_mean_ece": "0.2572 ± 0.0193"
+    }
+  },
+  "tta": {
+    "use": false,
+    "rule": "OOF(Fold k 검증 이미지를 Fold k 모델로 예측)에서 2-Model Ensemble의 Fold별 Mean AUROC를 TTA 있음/없음으로 계산해, 5개 Fold 평균 차이(TTA − 없음)가 0보다 크면 TTA 사용. Test 성능은 사용하지 않음.",
+    "oof_fold_auroc_no_tta": [
+      0.826969,
+      0.831525,
+      0.829001,
+      0.833647,
+      0.829042
+    ],
+    "oof_fold_auroc_tta": [
+      0.826224,
+      0.829136,
+      0.825073,
+      0.833046,
+      0.826095
+    ],
+    "oof_mean_diff": -0.002122,
+    "folds_improved": 0
+  }
+}
