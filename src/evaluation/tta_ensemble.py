@@ -423,7 +423,7 @@ def tta_markdown(metrics, per_disease, runs, n_test, decision) -> str:
     return "\n".join(lines)
 
 
-def ensemble_markdown(metrics, runs, n_test, use_tta: bool) -> str:
+def ensemble_markdown(metrics, per_disease, runs, n_test, use_tta: bool) -> str:
     base = MODEL_ORDER[0]
     other = "TTA 적용" if not use_tta else "TTA 없는"
     lines = [
@@ -472,7 +472,31 @@ def ensemble_markdown(metrics, runs, n_test, use_tta: bool) -> str:
             lines.append(f"| {_label(method)} | " + " | ".join(f"{v:.4f}" for v in vals) + f" | {gain} |")
 
     lines += ["", "ECE는 낮을수록 좋음. 향상 폭의 ECE가 음수면 Calibration이 좋아진 것.", ""]
+    lines += per_disease_markdown(per_disease, use_tta)
     return "\n".join(lines)
+
+
+def per_disease_markdown(per_disease: pd.DataFrame, use_tta: bool) -> list[str]:
+    """최종 예측 방식(5-Fold 평균, OOF로 정한 TTA)의 14개 질환별 AUROC·AUPRC 표"""
+    sub = per_disease[per_disease["unit"].eq("5fold") & per_disease["tta"].eq(use_tta)]
+    methods = (*MODEL_ORDER, "ensemble")
+    table = {m: sub[sub["method"].eq(m)].set_index("disease") for m in methods}
+    head = " | ".join(f"{_label(m)} {k}" for m in methods for k in ("AUROC", "AUPRC"))
+    lines = [
+        f"## 14개 질환별 AUROC · AUPRC (Test, 5-Fold 평균 예측, {'TTA 적용' if use_tta else 'TTA 없음'})",
+        "",
+        "최종 예측은 2-Model Ensemble. AUPRC는 유병률에 따라 기준값(무작위 = 유병률)이 달라 질환 간 직접 비교하지 않는다. "
+        "모든 수치는 NIH 자동 추출 라벨 기준이다.",
+        "",
+        f"| 질환 | {head} |",
+        "| --- |" + " --- |" * (2 * len(methods)),
+    ]
+    for d in DISEASES:
+        cells = [f"{table[m].loc[d, k]:.4f}" for m in methods for k in ("auroc", "auprc")]
+        lines.append(f"| {d} | " + " | ".join(cells) + " |")
+    means = [f"**{table[m][k].mean():.4f}**" for m in methods for k in ("auroc", "auprc")]
+    lines += [f"| **평균** | " + " | ".join(means) + " |", ""]
+    return lines
 
 
 # ---------------------------------------------------------------------------
@@ -599,7 +623,7 @@ def main(argv=None) -> int:
     (report_dir / "tta_comparison.md").write_text(
         tta_markdown(metrics, per_disease, runs, n_test, decision), encoding="utf-8")
     (report_dir / "ensemble_comparison.md").write_text(
-        ensemble_markdown(metrics, runs, n_test, use_tta), encoding="utf-8")
+        ensemble_markdown(metrics, per_disease, runs, n_test, use_tta), encoding="utf-8")
     (report_dir / "selected_runs.json").write_text(json.dumps(
         {"criterion": SELECTION_RULE, "n_test": n_test, "limit": args.limit, "runs": runs,
          "tta": decision or {"use": False, "rule": "OOF 생략(--skip-oof) → 기본값 사용 안 함"}},
